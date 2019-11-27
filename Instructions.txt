@@ -1,0 +1,10 @@
+Ensure you copy the file 'OutputLocation.txt' to where your X-Ways executable is, and edit the path within it to where you want to direct the output, including the trailing slash.
+e.g. C:\MyCasework\MyOutput\ or D:\MyOperation\MyOutput\
+
+It should be ONE LINE ONLY. Do NOT put anything else in the file other than the location of where you want your output to go. 
+
+The output location does not have to exist at runtime, but it will be created at runtime if it does not exist already. If it does exist already, new data will be written into it.  
+
+The X-Tension must be executed by right clicking a selection of files in the Directory Browser. You can try to run it via the main menu or RVS dialog but it will tell you to stop trying to and to run it how I have just told you to run it. 
+
+Ted Smith
