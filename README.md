@@ -6,7 +6,7 @@
   This X-Tension is designed for use only with v18.9 or later (due to file category lookup).
   This X-Tension is not designed for use on Linux or OSX platforms.
   The case must have either MD5, SHA-1 or SHA256 hash algorithms computed.
-  There is a compiled 32 and 64 bit version of the X-Tension to be used with the corresponding version of X-Wyas Forensics. 
+  There is a compiled 32 and 64 bit version of the X-Tension to be used with the corresponding version of X-Ways Forensics. 
 
 ###  ** Usage Disclaimer ***
   This X-Tension is a Proof-Of-Concept Alpha level prototype, and is not finished. It has known
