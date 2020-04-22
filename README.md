@@ -3,7 +3,7 @@
 
 ###  *** Requirements ***
   This X-Tension is designed for use only with X-Ways Forensics.
-  This X-Tension is designed for use only with v18.9 or later (due to file category lookup).
+  This X-Tension is designed for use only with v18.9 or later (due to file category lookup), and ideally v20.0+.
   This X-Tension is not designed for use on Linux or OSX platforms.
   The case must have either MD5, SHA-1 or SHA256 hash algorithms computed.
   There is a compiled 32 and 64 bit version of the X-Tension to be used with the corresponding version of X-Ways Forensics. 
@@ -23,10 +23,8 @@
   Upon completion, the output can be injested into Relativity.
 
 ###  TODOs
-   // TODO TedSmith : Add a decompression library for
-    * MS Office and
-    * LibreOffice files and
-    * Adobe PDF files
+   // TODO TedSmith : Further develop decompression of more compound files for XWF users older than v20.0
+   // DOCX and ODT added to v0.2 Alpha. Adobe PDF files, and XLSX files still to do
    // TODO TedSmith : Fix parent object lookup for items embedded in another object
      where the actual file parent seems to be being skipped, even if the remaining path is not.
    // TODO Ted Smith : Write user manual
