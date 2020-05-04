@@ -2,7 +2,8 @@ library LoadFileIngester;
 {
   *** Requirements ***
   This X-Tension is designed for use only with X-Ways Forensics.
-  This X-Tension is designed for use only with v18.9 or later (due to file category lookup).
+  This X-Tension is designed for use with v18.9 or later (due to file category lookup)
+  and ideally v20.0+ for maximum capability
   This X-Tension is not designed for use on Linux or OSX platforms.
   The case must have either MD5, SHA-1 or SHA256 hash algorithms computed.
 
@@ -17,16 +18,13 @@ library LoadFileIngester;
   supplied file : OutputLocation.txt. The folder does not have to exist before execution.
   This text file MUST be copied to the location of where
   X-Ways Forensics is running from. By default, the output location is
-  c:\temp\RelativityOutput\
-  Upon completion, the output can be injested into Relativity.
+  C:\TEMP\RELATIVITYOUTPUT
+  Upon completion, the output can be ingested into Relativity.
 
   TODOs
-   // TODO TedSmith : Add a decompression library for
-    * MS Office and
-    * LibreOffice files and
-    * Adobe PDF files
-   // TODO TedSmith : Fix parent object lookup for items embedded in another object
-     where the actual file parent seems to be being skipped, even if the remaining path is not.
+    * Handle Adobe PDF files and more Office files (docx and odt added in April 2020)
+   // Fix parent object lookup for items embedded in another object
+      where the actual file parent seems to be being skipped, even if the remaining path is not.
    // TODO Ted Smith : Write user manual
 
   *** License ***
@@ -92,30 +90,30 @@ begin
   // Get 3rd high byte for service release. We dont need it yet but we might one day
   ServiceRelease := HiByte(nVersion);
 
-  // If the version of XWF is less than v18.9, abort.
+  // If the version of XWF is less than v18.9, abort, because we can't use it.
   if VerRelease < 1890 then
   begin
      MessageBox(MainWnd, 'Error: ' +
                         ' Please execute this X-Tension using v18.9 or above ',
                         'Relativity LoadFile Generator', MB_ICONINFORMATION);
-
-
     result := -1;  // Should abort and not run any further
   end
-  else  // If the version of XWF is less than v20.00 but greater than 18.9, continue but with advisory.
+  else  // If XWF version is less than v20.0 but greater than 18.9, continue but with an advisory.
     if (VerRelease > 1890) and (VerRelease < 2000) then
     begin
       VerReleaseIsLessThan2000 := true;
       MessageBox(MainWnd, 'Warning: ' +
                               ' Limited support for compound files (e.g. DOCX) available. Advise use of XWF v20.00+ ',
                               'Relativity LoadFile Generator', MB_ICONINFORMATION);
-
-
       result := 1;  // Continue, with warning accepted
-    end;
+    end
+    else
+      begin
+        // If XWF version is v20.0+, continue with no advisory needed.
+        VerRelease2000OrAbove := true;
+        result := 1;  // Continue, with no need for warning
+      end;
 
-  // If the versioning is above 18.9, and regardless of whether it is less than v20.00 or higher, continue
-  VerRelease2000OrAbove := true;
   TotalDataInBytes      := 0;
   FillChar(pBufEvdName, SizeOf(pBufEvdName), $00);
 
@@ -388,6 +386,21 @@ begin
   result := true;
 end;
 
+// Get the ItemID prefix number. The prefix number is the evidence object number
+// that relates to the partition of a volume. e.g. 0-1234 means "Partition 0, item 1234"
+// We need the prefix number for each item to uniquely ID an item across a case
+// with multiple disk images or even a single image if it has multiple partitions
+// Returns -1 on failure. 0 or above on success, commonly '0', or '1', or '2', or '3' etc.
+function GetEvidenceObjectID(hVolume : THandle) : Int64; stdcall; export;
+var
+  ObjectID : Int64;
+begin
+  result := -1;
+  ObjectID := XWF_GetEvObjProp(hVolume, 3, nil);
+  if ObjectID > -1 then result := ObjectID;
+end;
+
+
 // Gets the case name, and currently selected evidence object, and the image size
 // and stores as a header for writing to HTML output later. Returns true on success. False otherwise.
 { Not currently used...
@@ -582,7 +595,7 @@ const
 var
   // WideChar arrays. More preferable on Windows UTF16 systems and better for Unicode chars
   lpTypeDescr, lpTypeDescrOffice, Buf, OutputFolder,
-    UniqueID, errormessage, TruncatedFilename, strHashValue,
+    errormessage, TruncatedFilename, strHashValue,
     OutputLocationForNATIVE, OutputLocationForTEXT, JoinedFilePath,
     JoinedFilePathAndName, OutputFileText,  strModifiedDateTime,
     OfficeFileName, OutputLocationOfFile : array[0..Buflen-1] of WideChar;
@@ -614,7 +627,8 @@ var
   // XWF_GetFileName returns a pointer to a null terminated widechar. It decides what array to return
   // However, using UnicodeStrings is more generally advised in FPC as memory handling is taken
   // care of automatically by the compiler, thus avoiding the need for New() and Dispose()
-  NativeFileName, ParentFileName, CorrectedFilename, FileExtension : unicodestring;
+  NativeFileName, ParentFileName, CorrectedFilename, FileExtension,
+    ObjectID, UniqueID : unicodestring;
 
 begin
   ItemSize               := -1;
@@ -700,11 +714,11 @@ begin
               JoinedFilePathAndName := JoinedFilePath + NativeFileName; // Not needed, yet. But might do in future.
             end;
 
-          // Get the UniqueID for each item processed based on ItemID from XWF case.
-          // Note this does not include the partition prefix. Example :
+          // Get the UniqueID for each item processed based on Evidence Object number
+          // and the ItemID from the XWF case, e.g. 0-1468 where 0 = partition and 1468 = itemID.
           // X-Ways reports a unique ID of 0-1468, which means "First partition, item 1468,
-          // but the value returned here will be just "1468".
-          UniqueID := IntToStr(nItemID);
+          ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
+          UniqueID := ObjectID + '-' + IntToStr(nItemID);
 
           // Get the hash value, if one exists.
           strHashValue := GetHashValue(nItemID);
@@ -720,7 +734,7 @@ begin
 
           // Calculate the path and filename lengths
           // First, get the length of the Unique ID and Filename
-          intLengthOfFilename     := SysUtils.StrLen(UniqueID) + Length(NativeFilename);
+          intLengthOfFilename     := Length(UniqueID) + Length(NativeFilename);
 
           // Second, compute the length of the output folder length, including the "NATIVE" sub dir
           intLengthOfOutputFolder := intOutputLength + SysUtils.StrLen(OutputSubFolderNATIVE);
@@ -992,7 +1006,13 @@ begin
           // Finalise output to the Loadfile for this Item
           // Populate the loadfile, using Unicode TAB character value. Not comma, because sometimes e-mail attachments contain comma in the name
           slOutput.Add(UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
-        end; // end of first XWF_OpenItem
+        end  // end of first XWF_OpenItem
+        else // Alert the user that the native file could not handled
+        begin
+          errormessage := 'ERROR : Object with ID ' + IntToStr(nItemID) + ' could not be accessed or processed. File handle failure.';
+          lstrcpyw(Buf, errormessage);
+          XWF_OutputMessage(@Buf[0], 0);
+        end;
       end; // end of item type flags check
     end; // end of description check
   end; // end of itemsize check
@@ -1047,7 +1067,8 @@ exports
   GetHashValue,
   FileTimeToDateTime,
   CreateFolderStructure,
-  GetOutputLocation;
+  GetOutputLocation,
+  GetEvidenceObjectID;
 begin
 
 end.
