@@ -1,6 +1,12 @@
 RELEASE NOTES
 =============
 
+May 5th 2020
+Compound office files are now unzipped to the users default temp area (C:\Users\UserName\AppData\Local\Temp\XWF_2_RT_Temp) instead of C:\Temp to avoid filesystem permission issues. 
+If file handle assignment fails for any given item as either native file or text file, an output error detailing the item name or ID is shown in messages window
+The UniqueID, as reported exactly in XWF is now reported fully, instead of just the ItemID within the context of the partition. So previously, item with ID "1234" was reported as "1234" but if it is
+in partition 1, the casewide UniqueID is "1-1234", and it is that which is now reported instead of "1234". 
+
 Apr 22, 2020
 Initial creation of new branch, v02-Alpha. 
 Functionality as before, but with new additions. 

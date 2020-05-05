@@ -307,6 +307,7 @@ begin
   result := '';
   UnZipper := TUnZipper.Create;
   try
+    // Unzip the office file to the path declared by TextificationOutputPath
     UnZipper.FileName := ZipName;
     UnZipper.OutputPath := TextificationOutputPath;
     UnZipper.Examine;
@@ -436,7 +437,7 @@ end;
 // XT_Prepare : used for every evidence object involved in execution
 function XT_Prepare(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved : Pointer) : integer; stdcall; export;
 var
-  outputmessage, Buf  : array[0..MAX_PATH] of WideChar;
+  outputmessage, Buf, tempdir  : array[0..MAX_PATH] of WideChar;
   OutputFoldersCreatedOK : boolean;
 begin
   FillChar(outputmessage, Length(outputmessage), $00);
@@ -515,25 +516,29 @@ begin
       end;
 
       // To process compound Office documents, they are exported and then unzipped
-      // This will take place in C:\temp\compound. So we check that on launch of
+      // This will take place in C:\XWF_2_RT_Temp\compound. So we check that on launch of
       // the X-Tension for use later.
       // If the folder exists from previous runs, delete it and then re-create it.
       // Or, create it if it does not exist to start with
       try
         if  VerReleaseIsLessThan2000 = true then
         begin
-          if DirectoryExists('C:\temp\compound') = true then
+          // We assign and create a temp area for putting compound files in.
+          // On most systems this will be
+          // C:\Users\Username\AppData\Local\Temp\XWF_2_RT_Temp
+          tempdir := GetTempDir;
+          if DirectoryExists(tempdir + 'XWF_2_RT_Temp\compound') = true then
           begin
-            DeleteDirectory('C:\temp\compound', true);
-            if ForceDirectories('C:\temp\compound') then
+            DeleteDirectory(tempdir + 'XWF_2_RT_Temp\compound', true);
+            if ForceDirectories(tempdir + 'XWF_2_RT_Temp\compound') then
             begin
-              TextificationOutputPath := 'C:\temp\compound\';
+              TextificationOutputPath := tempdir + 'XWF_2_RT_Temp\compound\';
             end;
           end
           else
           begin
-            ForceDirectories('C:\temp\compound');
-            TextificationOutputPath := 'C:\temp\compound\';
+            ForceDirectories(tempdir + 'XWF_2_RT_Temp\compound');
+            TextificationOutputPath := tempdir + 'XWF_2_RT_Temp\compound\';
           end;
         end; // VersionRelease is 20.0 or higher, so no need for these folder
       finally
@@ -597,8 +602,8 @@ var
   lpTypeDescr, lpTypeDescrOffice, Buf, OutputFolder,
     errormessage, TruncatedFilename, strHashValue,
     OutputLocationForNATIVE, OutputLocationForTEXT, JoinedFilePath,
-    JoinedFilePathAndName, OutputFileText,  strModifiedDateTime,
-    OfficeFileName, OutputLocationOfFile : array[0..Buflen-1] of WideChar;
+    JoinedFilePathAndName, OutputFileText,  strModifiedDateTime, UnzipLocation,
+    OfficeFileName : array[0..Buflen-1] of WideChar;
 
   // 32-bit integers
    itemtypeinfoflag, itemtypeinfoflagOfficeFile, intBytesRead, parentCounter, intLengthOfOutputFolder,
@@ -606,7 +611,7 @@ var
      intBreachValue                          : integer;
 
   // 64-bit integers
-  ItemSize, intModifiedDateTime   : Int64;
+  ItemSize, intModifiedDateTime, OfficeFileReadResult   : Int64;
 
   // Plain Byte arrays, TBytes
   InputBytesBuffer, TextifiedBuffer          : TBytes; // using TBytes because it allows use of SetLength so we can enlarge or reduce depending on file size (i.e.ItemSize)
@@ -627,7 +632,7 @@ var
   // XWF_GetFileName returns a pointer to a null terminated widechar. It decides what array to return
   // However, using UnicodeStrings is more generally advised in FPC as memory handling is taken
   // care of automatically by the compiler, thus avoiding the need for New() and Dispose()
-  NativeFileName, ParentFileName, CorrectedFilename, FileExtension,
+  NativeFileName, ParentFileName, CorrectedFilename, FileExtension, OutputLocationOfFile,
     ObjectID, UniqueID : unicodestring;
 
 begin
@@ -636,6 +641,7 @@ begin
   intTotalOutputLength   := 0;
   intBreachValue         := 0;
   intModifiedDateTime    := 0;
+  OfficeFileReadResult   := -1;
 
   // Make sure buffers are empty and filled with zeroes
   // This explains why its done this way : https://forum.lazarus.freepascal.org/index.php?topic=13296.0
@@ -855,15 +861,27 @@ begin
 
               if IsItAnOfficeFile then
               begin
-                // Unzip the compound file and get the path to "\word\document.xml" (Word) or "content.xml" (Libreoffice)
+                // Unzip the compound file to a temp space, 'c:\XWF_2_RT_Temp',
+                // and get the path to "C:\XWF_2_RT_Temp\word\document.xml" (Word)
+                // or "c:\XWF_2_RT_Temp\content.xml" (Libreoffice)
+                UnzipLocation := GetTempDir + 'XWF_2_RT_Temp';
+                ForceDirectories(UnzipLocation);
                 OfficeFileName := ExtractFileFromZip(OutputLocationOfFile);
-                // Read the appropriate.xml from the docx or odt file and store its content in InputBytesBuffer
+
+                // Read the appropriate .xml from the docx or odt file and store its content in InputBytesBuffer
                 // This obviously replaces anything already in the buffer from the initial read
                 // TODO : Work out how to do the read only once rather than twice when a compound file
                 temp_strm := TFileStream.Create(OfficeFileName, fmOpenRead or fmShareDenyWrite);
                 try
                   SetLength(InputBytesBuffer, temp_strm.Size);
-                  temp_strm.Read(InputBytesBuffer[1], temp_strm.Size);
+                  OfficeFileReadResult := 0;
+                  OfficeFileReadResult := temp_strm.Read(InputBytesBuffer[1], temp_strm.Size);
+                  if OfficeFileReadResult = 0 then
+                  begin
+                    errormessage := 'ERROR : Could not read exported compound office file ' + OutputLocationOfFile;
+                    lstrcpyw(Buf, errorMessage);
+                    XWF_OutputMessage(@Buf[0], 0);
+                  end;
                 finally
                   temp_strm.Free;
                 end;
