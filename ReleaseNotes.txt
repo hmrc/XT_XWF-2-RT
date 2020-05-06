@@ -1,0 +1,28 @@
+RELEASE NOTES
+=============
+
+May 5th 2020
+Compound office files are now unzipped to the users default temp area (C:\Users\UserName\AppData\Local\Temp\XWF_2_RT_Temp) instead of C:\Temp to avoid filesystem permission issues. 
+If file handle assignment fails for any given item as either native file or text file, an output error detailing the item name or ID is shown in messages window
+The UniqueID, as reported exactly in XWF is now reported fully, instead of just the ItemID within the context of the partition. So previously, item with ID "1234" was reported as "1234" but if it is
+in partition 1, the casewide UniqueID is "1-1234", and it is that which is now reported instead of "1234". 
+
+Apr 22, 2020
+Initial creation of new branch, v02-Alpha. 
+Functionality as before, but with new additions. 
+If used with versions of XWF between 18.9 and v19.9, compressed MS Office documents that using the docx format will be temporarily exported, unzipped, and the content of document.xml textified
+If used with versions of XWF between 18.9 and v19.9, compressed LibreOffice Writer documents that use the odt format will be temporarily exported, unzipped, and the content of content.xml textified
+If used with versions of XWF between 20.0+, the X-Tension utilises the new flag of XWF_OpenItem ("0x0400 = extrain plain text on the fly and open textual data (v20.0 and later, useful for certain 
+supported file formats)" that allows a text based handle to the file object. As such, that view is exported as the text file, and the textification routine is skipped. 
+PWideChar variables switched to UnicodeString types for better memory management
+
+Depends on the use of XWF v18.9 or above, ideally v20.0 or above. 
+
+Nov 27, 2019
+Initial release of v01-Alpha. 
+Current functionality : Enables users to select one or more files in the Directory Browser of X-Ways Forensics, and upon execution of the X-Tension (DLL), it will 
+1) export the selected files to a NATIVE folder in the output location
+2) export the selected files as text to a TEXT folder in the output location
+3) Create a TSV loadfile containing the original filename and path, the filenames and paths of their exported locations, and include some metadata such as Modified Date, hash value etc. 
+
+Depends on the use of XWF v18.9 or above
