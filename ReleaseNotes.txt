@@ -1,6 +1,12 @@
 RELEASE NOTES
 =============
 
+June 2020
+The OutputNativeStream was attempting to be freed outside of a loop, meaning if the loop was false, it was trying to free a stream that did not exist. Fixed
+The secondary handle to the file object for textification was not always properly freed from the first native handle before a second handle was initiated. Fixed
+An ErrorLog.txt file will now be created and saved containing the ID's of the items that had a type that was considered unsuitable to allow the file to be meaningfully exported
+If the OutputLocation.txt file is missing, it will automatically assume default output to c:\temp\RelativityOutput. Before it would just crash out. 
+ 
 May 5th 2020
 Compound office files are now unzipped to the users default temp area (C:\Users\UserName\AppData\Local\Temp\XWF_2_RT_Temp) instead of C:\Temp to avoid filesystem permission issues. 
 If file handle assignment fails for any given item as either native file or text file, an output error detailing the item name or ID is shown in messages window

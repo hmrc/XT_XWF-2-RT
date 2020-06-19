@@ -14,11 +14,13 @@ library LoadFileIngester;
   *** Functionality Overview ***
   The X-Tension creates a Relativity Loadfile from the users selected files.
   The user must execute it by right clicking the required files and then "Run X-Tensions".
+
   By default, the generated output will be written to the path specified in the
-  supplied file : OutputLocation.txt. The folder does not have to exist before execution.
-  This text file MUST be copied to the location of where
-  X-Ways Forensics is running from. By default, the output location is
-  C:\TEMP\RELATIVITYOUTPUT
+  supplied file : OutputLocation.txt IF it is saved to the same folder as the DLL.
+  If the path stated in that file does not exist it will be created. If
+  OutputLocation.txt itself is missing, the default output location of c:\temp\relativityouput
+  will be assumed, and created. The output folder does not have to exist before execution.
+
   Upon completion, the output can be ingested into Relativity.
 
   TODOs
@@ -76,7 +78,7 @@ var
   StartTime, EndTime       : TDateTime;
   TimeTaken, TextificationOutputPath : string;
   OutputSubFolderNative, OutputSubFolderText, OutputFolder : array[0..Buflen-1] of WideChar;
-
+  ErrorLog                 : TStringList;
   // Evidence name is global for later filesave by name
   pBufEvdName              : array[0..BufEvdNameLen-1] of WideChar;
 
@@ -324,32 +326,44 @@ begin
 end;
 
 // GetOutputLocation : Open OutputLocation.txt and get the path from line 1 and
-// return that string. Returns empty string on failure
+// return that string. Or return c:\temp\relativityoutput if missing.
+// Returns empty string on failure
 function GetOutputLocation() : widestring; stdcall; export;
 const
   C_FNAME = 'OutputLocation.txt';
 
 var
   UserFile  : Text;
-  FileName,
-    TFile   : String;
+  FileName  : String;
+  strOutputLocation, TFile   : Unicodestring;
+
 begin
   result              := '';
   intOutputLength     := 0;
   FileName            := C_FNAME;
 
-  Assign(UserFile, FileName);
-  Reset(UserFile); { 'Reset' means open the file x and reset cursor to the beginning of file }
-  Repeat
-    Readln(UserFile,TFile);
-  Until Eof(UserFile);
+  // If an OutputLocation.txt file exists the user may have declared a custom output location
+  // so look it up and use it
+  if FileExists(C_FNAME) then
+  begin
+    Assign(UserFile, FileName);
+    Reset(UserFile); { 'Reset' means open the file x and reset cursor to the beginning of file }
+    Repeat
+      Readln(UserFile,TFile);
+    Until Eof(UserFile);
 
-  // Get the length of the output path. We need this for later to make sure long filenames dont break Windows
-  intOutputLength := Length(TFile);
-  // Close the file
-  Close(UserFile);
-  // Switch the result to a UTF16 string for Windows and return that as result
-  result := UTF8ToUTF16(TFile);
+    // Get the length of the output path. We need this for later to make sure long filenames dont break Windows
+    intOutputLength := Length(TFile);
+    // Close the file
+    Close(UserFile);
+    // Switch the result to a UTF16 string for Windows and return that as result
+    result := UTF8ToUTF16(TFile);
+  end
+  else   // As an OutputLocation.txt file does not exist, set a default output location
+  begin
+    TFile := 'C:\temp\RelativityOutput';
+    result := UTF8ToUTF16(TFile);
+  end;
 end;
 
 // CreateFolderStructure : CreateFolderStructure creates the output folders for the data to live in
@@ -555,6 +569,9 @@ begin
         OutputSubFolderNative := IncludeTrailingPathDelimiter(OutputFolder) + 'NATIVE';
         OutputSubFolderText   := IncludeTrailingPathDelimiter(OutputFolder) + 'TEXT';
       end;
+
+      // Create error log list in memory
+      ErrorLog := TStringList.Create;
     end;
 end;
 
@@ -642,7 +659,7 @@ begin
   intBreachValue         := 0;
   intModifiedDateTime    := 0;
   OfficeFileReadResult   := -1;
-
+  hItem                  := 0;
   // Make sure buffers are empty and filled with zeroes
   // This explains why its done this way : https://forum.lazarus.freepascal.org/index.php?topic=13296.0
   FillByte(lpTypeDescr[0],       Length(lpTypeDescr)*sizeof(lpTypeDescr[0]), 0);
@@ -676,7 +693,9 @@ begin
     // For every item, check the type status. We also collect the category (0x4000000)
     // though we do not use it in this X-Tension, yet, as we are exporting selected files
     // chosen by the user, regardless of their type. However, we are only then exporting if
-    // they have a valid status. 3, 4, and 5 are potentially legible files. 0, 1 and 2 are not.
+    // they have a valid type status, otherwise we may be exporting invalid type files.
+    // 0=not verified, 1=too small, 2=totally unknown, 3=confirmed, 4=not confirmed, 5=newly identified, 6=mismatch detected. -1 means error.
+    // 3, 4, and 5 are potentially correctly identified types. 0, 1 and 2 are not and so are skipped.
 
     itemtypeinfoflag := XWF_GetItemType(nItemID, @lpTypeDescr, Length(lpTypeDescr) or $40000000);
 
@@ -684,9 +703,9 @@ begin
       So if the buffer is empty, no text category could be retrieved. Otherwise, classify it. }
     if lpTypeDescr<> #0 then
     begin
-      // 3 = Confirmed file
-      // 4 = Not confirmed
-      // 5 = Newly identified
+      // 3 = Confirmed file type
+      // 4 = Not confirmed file type but likely OK based on extension
+      // 5 = Newly identified type status
       if (itemtypeinfoflag = 3) or (itemtypeinfoflag = 4) or (itemtypeinfoflag = 5) then
       begin
         // Get the nano second Windows FILETIME date of the modified date value for the item
@@ -813,19 +832,25 @@ begin
               OutputLocationForNATIVE := '.\NATIVE\' + UniqueID+'-'+UTF16toUTF8(TruncatedFilename);
             end;
 
-            // Read the native file item to buffer
-            intBytesRead := XWF_Read(hItem, 0, @InputBytesBuffer[0], ItemSize);
-            // Write the native file out to disk using the above declared stream
-            WriteSuccess := -1;
-            WriteSuccess := OutputStreamNative.Write(InputBytesBuffer[0], ItemSize);
-            if WriteSuccess = -1 then
-              begin
-                errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + ' could not be written to disk. FileStream write error.';
-                lstrcpyw(Buf, errormessage);
-                XWF_OutputMessage(@Buf[0], 0);
-              end;
+            // Only if an output stream was successfully created, try to read
+            // the source and write it out to the stream
+            if assigned(OutputStreamNative) then
+            begin
+              // Read the native file item to buffer
+              intBytesRead := XWF_Read(hItem, 0, @InputBytesBuffer[0], ItemSize);
+              // Write the native file out to disk using the above declared stream
+              WriteSuccess := -1;
+              WriteSuccess := OutputStreamNative.Write(InputBytesBuffer[0], ItemSize);
+              if WriteSuccess = -1 then
+                begin
+                  errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + ' could not be written to disk. FileStream write error.';
+                  lstrcpyw(Buf, errormessage);
+                  XWF_OutputMessage(@Buf[0], 0);
+                end;
+              OutputStreamNative.Free;
+            end;
           finally
-            OutputStreamNative.free;
+          // nothing to free
           end;
 
           // Check if it's a picture, because if it is, we dont textify it
@@ -952,7 +977,13 @@ begin
           // been written out to disk.
           if (VerRelease2000OrAbove = true) and (IsItAPicture = false) then
           begin
-            // Get new text based handle to itemID, if one can be obtained, i.e. not encrypted etc
+            // Check the former handle has been freed and then get new text based handle
+            // to itemID, if one can be obtained, i.e. it is not encrypted etc
+            if (hItem) > 0 then
+            begin
+              XWF_Close(hItem);
+            end;
+
             hItem := XWF_OpenItem(CurrentVolume, nItemID, $400);
             if hItem > 0 then
             begin
@@ -1031,7 +1062,33 @@ begin
           lstrcpyw(Buf, errormessage);
           XWF_OutputMessage(@Buf[0], 0);
         end;
-      end; // end of item type flags check
+      end // end of item type flags check
+      else // Item type was considered invalid so enter its ID to errorlog
+      begin
+        ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
+        UniqueID := ObjectID + '-' + IntToStr(nItemID);
+        // 0=not verified, 1=too small, 2=totally unknown, 3=confirmed, 4=not confirmed, 5=newly identified, 6=mismatch detected. -1 means error.
+        if itemtypeinfoflag = 0 then
+        begin
+          errorlog.add(UniqueID + ' file type is not verified.');
+        end
+          else if itemtypeinfoflag = 1 then
+          begin
+            errorlog.add(UniqueID + ' file type is too small to be verified.');
+          end
+            else if itemtypeinfoflag = 2 then
+            begin
+              errorlog.add(UniqueID + ' file type is totally unknown to XWF.');
+            end
+              else if itemtypeinfoflag = 6 then
+              begin
+                errorlog.add(UniqueID + ' file type is mismatched.');
+              end
+                else if itemtypeinfoflag = -1 then
+                begin
+                  errorlog.add(UniqueID + ' error looking up file type entirely.');
+                end;
+      end; // End of error log entry
     end; // end of description check
   end; // end of itemsize check
 
@@ -1055,6 +1112,14 @@ begin
     // Free the memory used to store CSV LoadFile in RAM
     slOutput.Free;
   end;
+
+  // Write the error log to disk
+  try
+    errorlog.savetofile(LoadFileOutputFolder + 'ErrorLog.txt');
+  finally
+    errorlog.free;
+  end;
+
   EndTime       := Now;
   TimeTaken     := FormatDateTime('HH:MM:SS',EndTime-StartTime);
   outputmessage := 'X-Tension execution ended at ' + FormatDateTime('DD/MM/YY HH:MM:SS',EndTime) + ', ' + FormatByteSize(TotalDataInBytes) + ' read. Time taken : ' + TimeTaken;

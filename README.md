@@ -1,4 +1,3 @@
-
 # XT_XWF-2-RT (X-Ways Forensics to Relativity Injestion X-Tension)
 
 ###  *** Requirements ***
@@ -16,10 +15,10 @@
   The X-Tension creates a Relativity Loadfile from the users selected files.
   The user must execute it by right clicking the required files and then "Run X-Tensions".
   By default, the generated output will be written to the path specified in the
-  supplied file : OutputLocation.txt. The folder does not have to exist before execution.
-  This text file MUST be copied to the location of where
-  X-Ways Forensics is running from. By default, the output location is
-  c:\temp\RelativityOutput\
+  supplied file : OutputLocation.txt IF it is saved to the same folder as the DLL.
+  If the path stated in that file does not exist it will be created. If
+  OutputLocation.txt itself is missing, the default output location of c:\temp\relativityouput
+  will be assumed, and created. The output folder does not have to exist before execution.
   Upon completion, the output can be injested into Relativity.
 
 ###  TODOs
