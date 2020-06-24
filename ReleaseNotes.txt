@@ -1,7 +1,12 @@
 RELEASE NOTES
 =============
 
-June 2020
+June 2020 v0.4 Alpha
+The previously added check for OutputLocation.txt was not working, in as much as it was not being found and read. It should work now
+The Loadfile.tsv and Errorlog.txt were sometimes being prefixed by the name of the output subfolder due to missing trailing deliminator in the path. This should not happen now
+The Error Log will now add files whose size was 0 bytes and skipped, and whose type was totally unknown and skipped
+
+June 2020 v0.3 Alpha
 The OutputNativeStream was attempting to be freed outside of a loop, meaning if the loop was false, it was trying to free a stream that did not exist. Fixed
 The secondary handle to the file object for textification was not always properly freed from the first native handle before a second handle was initiated. Fixed
 An ErrorLog.txt file will now be created and saved containing the ID's of the items that had a type that was considered unsuitable to allow the file to be meaningfully exported

@@ -73,6 +73,7 @@ var
   VerReleaseIsLessThan2000 : Boolean;
   VerRelease2000OrAbove    : Boolean;
   intOutputLength          : integer;
+  strOutputLocation        : WideString;
   slOutput                 : TStringlist;
   HashType                 : Int64;
   StartTime, EndTime       : TDateTime;
@@ -330,21 +331,23 @@ end;
 // Returns empty string on failure
 function GetOutputLocation() : widestring; stdcall; export;
 const
-  C_FNAME = 'OutputLocation.txt';
-
+  BufLen=2048;
 var
   UserFile  : Text;
-  FileName  : String;
-  strOutputLocation, TFile   : Unicodestring;
+  FileName, TFile   : Unicodestring;
+  Buf, outputmessage : array[0..Buflen-1] of WideChar;
 
 begin
   result              := '';
   intOutputLength     := 0;
-  FileName            := C_FNAME;
+  outputmessage := '';
+  FillChar(outputmessage, Length(outputmessage), $00);
+  FillChar(Buf, Length(Buf), $00);
+  FileName            := 'OutputLocation.txt'; // this file needs to be in same folder as the DLL
 
-  // If an OutputLocation.txt file exists the user may have declared a custom output location
-  // so look it up and use it
-  if FileExists(C_FNAME) then
+  // If an OutputLocation.txt file exists in same folder as the DLL the user
+  // may have declared a custom output location so look it up and use it
+  if FileExists(FileName) then
   begin
     Assign(UserFile, FileName);
     Reset(UserFile); { 'Reset' means open the file x and reset cursor to the beginning of file }
@@ -358,12 +361,19 @@ begin
     Close(UserFile);
     // Switch the result to a UTF16 string for Windows and return that as result
     result := UTF8ToUTF16(TFile);
+    outputmessage := 'Output location : ' + TFile;
+    lstrcpyw(Buf, outputmessage);
+    XWF_OutputMessage(@Buf[0], 0);
   end
-  else   // As an OutputLocation.txt file does not exist, set a default output location
+  else   // As an OutputLocation.txt file does not exist, set a default output location instead
   begin
     TFile := 'C:\temp\RelativityOutput';
     result := UTF8ToUTF16(TFile);
+    outputmessage := 'Output location has defaulted to ' + TFile + ' because no OutputLocation.txt file was found with the X-Tension.';
+    lstrcpyw(Buf, outputmessage);
+    XWF_OutputMessage(@Buf[0], 0);
   end;
+  strOutputLocation := result;
 end;
 
 // CreateFolderStructure : CreateFolderStructure creates the output folders for the data to live in
@@ -374,6 +384,9 @@ var
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
 
 begin
+  outputmessage := '';
+  FillChar(outputmessage, Length(outputmessage), $00);
+  FillChar(Buf, Length(Buf), $00);
   result                := false;
   OutputSubFolderNative := IncludeTrailingPathDelimiter(RootOutputFolderName) + 'NATIVE';
   OutputSubFolderText   := IncludeTrailingPathDelimiter(RootOutputFolderName) + 'TEXT';
@@ -1089,8 +1102,20 @@ begin
                   errorlog.add(UniqueID + ' error looking up file type entirely.');
                 end;
       end; // End of error log entry
-    end; // end of description check
-  end; // end of itemsize check
+    end // end of description check
+    else
+    begin
+      ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
+      UniqueID := ObjectID + '-' + IntToStr(nItemID);
+      errorlog.add(UniqueID + ' type descriptor could not be identified at all. Skipped.');
+    end;
+  end // end of itemsize check
+  else
+  begin
+    ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
+    UniqueID := ObjectID + '-' + IntToStr(nItemID);
+    errorlog.add(UniqueID + ' size was 0 bytes. Skipped.');
+  end;
 
   // The ALL IMPORTANT 0 return value!!
   result := 0;
@@ -1100,22 +1125,23 @@ end;
 // Return -1 on failure. 0 on success.
 function XT_Finalize(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved : Pointer) : integer; stdcall; export;
 const
-  Buflen=1024;
+  Buflen=2048;
 var
   Buf, outputmessage, LoadFileOutputFolder : array[0..Buflen-1] of WideChar;
 begin
-  LoadFileOutputFolder := GetOutputLocation;
-  // Write the CSV LoadFile to disk
+  // Lookup where the output has been going
+  LoadFileOutputFolder := strOutputLocation;
+  // Write the CSV LoadFile to the same output location
   try
-    slOutput.SaveToFile(LoadFileOutputFolder + 'LoadFile.tsv');
+    slOutput.SaveToFile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'LoadFile.tsv');
   finally
     // Free the memory used to store CSV LoadFile in RAM
     slOutput.Free;
   end;
 
-  // Write the error log to disk
+  // Write the error log to the same output location
   try
-    errorlog.savetofile(LoadFileOutputFolder + 'ErrorLog.txt');
+    errorlog.savetofile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt');
   finally
     errorlog.free;
   end;
