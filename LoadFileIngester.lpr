@@ -74,12 +74,14 @@ var
   VerRelease2000OrAbove    : Boolean;
   intOutputLength          : integer;
   strOutputLocation        : WideString;
-  slOutput                 : TStringlist;
+  slOutput                 : TStringlistUTF8;
+  ErrorLog                 : TStringListUTF8;
   HashType                 : Int64;
+  ObjectID                 : Int64;         // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
   StartTime, EndTime       : TDateTime;
   TimeTaken, TextificationOutputPath : string;
   OutputSubFolderNative, OutputSubFolderText, OutputFolder : array[0..Buflen-1] of WideChar;
-  ErrorLog                 : TStringList;
+
   // Evidence name is global for later filesave by name
   pBufEvdName              : array[0..BufEvdNameLen-1] of WideChar;
 
@@ -117,12 +119,13 @@ begin
         result := 1;  // Continue, with no need for warning
       end;
 
-  TotalDataInBytes      := 0;
-  FillChar(pBufEvdName, SizeOf(pBufEvdName), $00);
-
   // Check XWF is ready to go. 1 is normal mode, 2 is thread-safe. Using 1 for now
   if Assigned(XWF_OutputMessage) then
   begin
+    TotalDataInBytes      := 0;
+    // Set Object ID to -1 ready to be set by GetEvdData
+    ObjectID              := -1;
+    FillChar(pBufEvdName, SizeOf(pBufEvdName), $00);
     Result := 1; // lets go
     MainWnd:= hMainWnd;
   end
@@ -148,7 +151,7 @@ function XT_About(hMainWnd : THandle; lpReserved : Pointer) : Longword; stdcall;
 begin
   result := 0;
   MessageBox(MainWnd,  ' Load File Generator for Relativity. An X-Tension for X-Ways Forensics. ' +
-                       ' To be executed only via by XWF v18.9 or higher and via right click of selected files. ' +
+                       ' To be executed only via by XWF v18.9 or higher (ideally XWF 20.0 upwards) and via right click of selected files. ' +
                        ' Developed by HMRC, Crown Copyright applies (c) 2019.' +
                        ' Intended use : automates extraction of selected files, creating a Load File for Relativity.'
                       ,'Load File Generator v1.0 Beta', MB_ICONINFORMATION);
@@ -414,62 +417,54 @@ begin
   result := true;
 end;
 
-// Get the ItemID prefix number. The prefix number is the evidence object number
-// that relates to the partition of a volume. e.g. 0-1234 means "Partition 0, item 1234"
-// We need the prefix number for each item to uniquely ID an item across a case
-// with multiple disk images or even a single image if it has multiple partitions
-// Returns -1 on failure. 0 or above on success, commonly '0', or '1', or '2', or '3' etc.
-function GetEvidenceObjectID(hVolume : THandle) : Int64; stdcall; export;
-var
-  ObjectID : Int64;
-begin
-  result := -1;
-  ObjectID := XWF_GetEvObjProp(hVolume, 3, nil);
-  if ObjectID > -1 then result := ObjectID;
-end;
-
 
 // Gets the case name, and currently selected evidence object, and the image size
 // and stores as a header for writing to HTML output later. Returns true on success. False otherwise.
-{ Not currently used...
+// Not currently used...
 function GetEvdData(hEvd : THandle) : boolean; stdcall; export;
 const
   BufLen=4096;
 var
   Buf            : array[0..BufLen-1] of WideChar;
   pBufCaseName   : array[0..Buflen-1] of WideChar;
-  CaseProperty, EvdSize, intEvdName : Int64;
+  CaseProperty, EvdSize, intEvdName: Int64;
 
 begin
   result := false;
-  // Get the case name, to act as the title in the output file, and store in pBufCaseName
+  // Get the case name; we dont use it yet but I may want to later
   // XWF_CASEPROP_TITLE = 1, thus that value passed
   CaseProperty := -1;
   CaseProperty := XWF_GetCaseProp(nil, 1, @pBufCaseName[0], Length(pBufCaseName));
 
-  // Get the item size of the evidence object. 16 = Evidence Total Size
+  // Get the item size of the evidence object. we dont use it yet but I may want to later
+  // 16 = Evidence Total Size
   EvdSize := -1;
   EvdSize := XWF_GetEvObjProp(hEvd, 16, nil);
 
-  // Get the evidence object name and store in pBufEvdName. 7 = object name
+  // Get the evidence object name; we dont use it yet but I may want to later
+  // 7 = object name
   intEvdName := -1;
   intEvdName := XWF_GetEvObjProp(hEvd, 7, @pBufEvdName[0]);
+
+  // Get the Unique ID prefix value. We convert it to a WORD later as per the XWF_GetEvObjProp API docs.
+  ObjectID := XWF_GetEvObjProp(hEvd, 3, nil);
 
   lstrcpyw(Buf, 'Case properties established : OK');
   XWF_OutputMessage(@Buf[0], 0);
   result := true;
 end;
-}
+
 
 // XT_Prepare : used for every evidence object involved in execution
 function XT_Prepare(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved : Pointer) : integer; stdcall; export;
 var
   outputmessage, Buf, tempdir  : array[0..MAX_PATH] of WideChar;
-  OutputFoldersCreatedOK : boolean;
+  OutputFoldersCreatedOK, EvidDataGotOK : boolean;
 begin
   FillChar(outputmessage, Length(outputmessage), $00);
   FillChar(Buf, Length(Buf), $00);
   OutputFoldersCreatedOK := false;
+  EvidDataGotOK := false;
   HashType := -1;
   RunFolderBuilderAgain := true;
   if nOpType <> 4 then
@@ -496,6 +491,8 @@ begin
 
       CurrentVolume := hVolume;            // Make sure the right column is set
 
+      EvidDataGotOK := GetEvdData(hEvidence);
+
       HashType := XWF_GetVSProp(20, nil);  // Work out what hash algorithm was used for the case. Correct as XWF v19.8
                                           {
                                           0: undefined
@@ -521,7 +518,7 @@ begin
 
       try
         // Initiate the LoadFile structure
-        slOutput := TStringList.Create;
+        slOutput := TStringListUTF8.Create;
         // Populate the loadfile, using Unicode TAB character value. Not comma,
         // because sometimes e-mail attachments contain comma in the name
         // These values enable Auto Mapping of XWF fields to Relativity fields
@@ -539,7 +536,14 @@ begin
                      'Hash'+#09+
                      'Primary Date');
       finally
-        // slOutput is freed and closed later
+        // slOutput is freed in XT_Finalize
+      end;
+
+      try
+        // Create error log list in memory
+        ErrorLog := TStringListUTF8.Create;
+      finally
+        // ErrorLog is freed in XT_Finalize
       end;
 
       // To process compound Office documents, they are exported and then unzipped
@@ -582,9 +586,6 @@ begin
         OutputSubFolderNative := IncludeTrailingPathDelimiter(OutputFolder) + 'NATIVE';
         OutputSubFolderText   := IncludeTrailingPathDelimiter(OutputFolder) + 'TEXT';
       end;
-
-      // Create error log list in memory
-      ErrorLog := TStringList.Create;
     end;
 end;
 
@@ -624,12 +625,12 @@ var
 
 // XT_ProcessItem : Examines each item in the selected evidence object. The "type category" of the item
 // is then added to a string list for traversal later. Must return 0! -1 if fails.
-function XT_ProcessItem(nItemID : LongWord; lpReserved : Pointer) : integer; stdcall; export;
+function XT_ProcessItemEx(nItemID : LongWord; hItemID : THandle; lpReserved : Pointer) : integer; stdcall; export;
 const
   BufLen=2048;
 var
   // WideChar arrays. More preferable on Windows UTF16 systems and better for Unicode chars
-  lpTypeDescr, lpTypeDescrOffice, Buf, OutputFolder,
+  lpTypeDescr, lpTypeDescrOffice, Buf, outputmessage, OutputFolder,
     errormessage, TruncatedFilename, strHashValue,
     OutputLocationForNATIVE, OutputLocationForTEXT, JoinedFilePath,
     JoinedFilePathAndName, OutputFileText,  strModifiedDateTime, UnzipLocation,
@@ -663,7 +664,7 @@ var
   // However, using UnicodeStrings is more generally advised in FPC as memory handling is taken
   // care of automatically by the compiler, thus avoiding the need for New() and Dispose()
   NativeFileName, ParentFileName, CorrectedFilename, FileExtension, OutputLocationOfFile,
-    ObjectID, UniqueID : unicodestring;
+    UniqueID : unicodestring;
 
 begin
   ItemSize               := -1;
@@ -677,6 +678,9 @@ begin
   // This explains why its done this way : https://forum.lazarus.freepascal.org/index.php?topic=13296.0
   FillByte(lpTypeDescr[0],       Length(lpTypeDescr)*sizeof(lpTypeDescr[0]), 0);
   FillByte(lpTypeDescrOffice[0], Length(lpTypeDescrOffice)*sizeof(lpTypeDescrOffice[0]), 0);
+  FillByte(InputBytesBuffer[0], Length(InputBytesBuffer)*sizeof(InputBytesBuffer[0]), 0);
+  FillByte(TextifiedBuffer[0], Length(TextifiedBuffer)*sizeof(TextifiedBuffer[0]), 0);
+
   //FillByte(bufHashVal[0], Length(bufHashVal)*sizeof(bufHashVal[0]), 0);
   JoinedFilePath          := '';
   JoinedFilePathAndName   := '';
@@ -700,15 +704,12 @@ begin
     // Make InputBytesBuffer big enough to hold file content
     SetLength(InputBytesBuffer, ItemSize);
 
-    // Make the output text buffer big enough to hold the max file content (though it will always be less)
-    SetLength(TextifiedBuffer, ItemSize);
-
     // For every item, check the type status. We also collect the category (0x4000000)
     // though we do not use it in this X-Tension, yet, as we are exporting selected files
     // chosen by the user, regardless of their type. However, we are only then exporting if
     // they have a valid type status, otherwise we may be exporting invalid type files.
     // 0=not verified, 1=too small, 2=totally unknown, 3=confirmed, 4=not confirmed, 5=newly identified, 6=mismatch detected. -1 means error.
-    // 3, 4, and 5 are potentially correctly identified types. 0, 1 and 2 are not and so are skipped.
+    // 3, and 5 are potentially correctly identified types. 0, 1, 2, 4, 6 and -1 are not and so are skipped.
 
     itemtypeinfoflag := XWF_GetItemType(nItemID, @lpTypeDescr, Length(lpTypeDescr) or $40000000);
 
@@ -719,7 +720,7 @@ begin
       // 3 = Confirmed file type
       // 4 = Not confirmed file type but likely OK based on extension
       // 5 = Newly identified type status
-      if (itemtypeinfoflag = 3) or (itemtypeinfoflag = 4) or (itemtypeinfoflag = 5) then
+      if (itemtypeinfoflag = 3) or (itemtypeinfoflag = 5) then
       begin
         // Get the nano second Windows FILETIME date of the modified date value for the item
         intModifiedDateTime := XWF_GetItemInformation(nItemID,  XWF_ITEM_INFO_MODIFICATIONTIME, nil);
@@ -754,9 +755,8 @@ begin
 
           // Get the UniqueID for each item processed based on Evidence Object number
           // and the ItemID from the XWF case, e.g. 0-1468 where 0 = partition and 1468 = itemID.
-          // X-Ways reports a unique ID of 0-1468, which means "First partition, item 1468,
-          ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
-          UniqueID := ObjectID + '-' + IntToStr(nItemID);
+
+          UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
 
           // Get the hash value, if one exists.
           strHashValue := GetHashValue(nItemID);
@@ -962,6 +962,9 @@ begin
                       XWF_OutputMessage(@Buf[0], 0);
                     end;
                 end;
+                // Make the output text buffer big enough to hold the max file content (though it will always be less)
+                SetLength(TextifiedBuffer, ItemSize);
+                // Output it to text file stream
                 OutputStreamText.Write(UTF8BOM[0],3);
                 WriteSuccess := -1;
                 WriteSuccess := OutputStreamText.Write(TextifiedBuffer[0], Length(TextifiedBuffer));
@@ -977,8 +980,10 @@ begin
                 OutputLocationForTEXT := '.\TEXT\' + OutputFileText;
               end;
             end; // text file check and export ends
+
           // Close the original file handle
           XWF_Close(hItem);
+
           end // End of pre XWF v20.0 behaviour
           else
           // ======== VERSIONS OF XWF => v20.0 ===========================================
@@ -990,14 +995,15 @@ begin
           // been written out to disk.
           if (VerRelease2000OrAbove = true) and (IsItAPicture = false) then
           begin
-            // Check the former handle has been freed and then get new text based handle
-            // to itemID, if one can be obtained, i.e. it is not encrypted etc
+            // Check the former handle has been freed
             if (hItem) > 0 then
             begin
               XWF_Close(hItem);
             end;
-
+            // and now get new UTF16 text based handle to itemID, if one can be obtained,
+            // i.e. it is not encrypted or devoid of text etc
             hItem := XWF_OpenItem(CurrentVolume, nItemID, $400);
+
             if hItem > 0 then
             begin
               // Get size of the text file associated with the handle, not size of original (nItemID) file
@@ -1056,30 +1062,39 @@ begin
                   OutputLocationForTEXT := '.\TEXT\' + OutputFileText;
                 end; // end of write text try statement
               end; // End of ItemSize valid
+
+              // Close item again to ensure resources freed
+              if (hItem) > 0 then
+              begin
+                XWF_Close(hItem);
+              end;
             end // End of valid handle check : if hItem > 0 etc. If the handle failed, warn the user
             else
             begin // Alert the user that a viewer component view of the file could not be painted
+              errorlog.add(UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read cannot be obtained. No text? Encrypted? Corrupt?');
               errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read of it cannot be obtained. Encrypted? Corrupt?';
               lstrcpyw(Buf, errormessage);
               XWF_OutputMessage(@Buf[0], 0);
+              errormessage := '....carrying on regardless....please wait';
+              lstrcpyw(Buf, errormessage);
+              XWF_OutputMessage(@Buf[0], 0);
             end;
-          end; // And of Version 20+ specific actions and end of 2nd XWF_OpenItem call
+          end; // End of 2nd XWF_OpenItem call, and of Version 20.0+ specific actions
 
           // Finalise output to the Loadfile for this Item
           // Populate the loadfile, using Unicode TAB character value. Not comma, because sometimes e-mail attachments contain comma in the name
-          slOutput.Add(UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
+         // slOutput.Add(UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
         end  // end of first XWF_OpenItem
         else // Alert the user that the native file could not handled
         begin
-          errormessage := 'ERROR : Object with ID ' + IntToStr(nItemID) + ' could not be accessed or processed. File handle failure.';
+          errormessage := 'ERROR : Object with ID ' + IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID) + ' could not be accessed or processed. File handle failure.';
           lstrcpyw(Buf, errormessage);
           XWF_OutputMessage(@Buf[0], 0);
         end;
       end // end of item type flags check
       else // Item type was considered invalid so enter its ID to errorlog
       begin
-        ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
-        UniqueID := ObjectID + '-' + IntToStr(nItemID);
+        UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
         // 0=not verified, 1=too small, 2=totally unknown, 3=confirmed, 4=not confirmed, 5=newly identified, 6=mismatch detected. -1 means error.
         if itemtypeinfoflag = 0 then
         begin
@@ -1093,30 +1108,41 @@ begin
             begin
               errorlog.add(UniqueID + ' file type is totally unknown to XWF.');
             end
-              else if itemtypeinfoflag = 6 then
+              else if itemtypeinfoflag = 4 then
               begin
-                errorlog.add(UniqueID + ' file type is mismatched.');
+                errorlog.add(UniqueID + ' file type cannot be confirmed by XWF. Most likely invalid');
               end
-                else if itemtypeinfoflag = -1 then
+                else if itemtypeinfoflag = 6 then
                 begin
-                  errorlog.add(UniqueID + ' error looking up file type entirely.');
-                end;
+                  errorlog.add(UniqueID + ' file type is mismatched.');
+                end
+                  else if itemtypeinfoflag = -1 then
+                  begin
+                    errorlog.add(UniqueID + ' error looking up file type entirely.');
+                  end;
       end; // End of error log entry
     end // end of description check
     else
     begin
-      ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
-      UniqueID := ObjectID + '-' + IntToStr(nItemID);
+      UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
       errorlog.add(UniqueID + ' type descriptor could not be identified at all. Skipped.');
     end;
   end // end of itemsize check
   else
   begin
-    ObjectID := inttostr(GetEvidenceObjectID(CurrentVolume));
-    UniqueID := ObjectID + '-' + IntToStr(nItemID);
+    UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
     errorlog.add(UniqueID + ' size was 0 bytes. Skipped.');
   end;
 
+  {
+  UniqueID := '';
+  NativeFileName := '';
+  FillByte(JoinedFilePath[0],       Length(JoinedFilePath)*sizeof(JoinedFilePath[0]), 0);
+  FillByte(OutputLocationForTEXT[0], Length(OutputLocationForTEXT)*sizeof(OutputLocationForTEXT[0]), 0);
+  FillByte(OutputLocationForNATIVE[0], Length(OutputLocationForNATIVE)*sizeof(OutputLocationForNATIVE[0]), 0);
+  FillByte(strHashValue[0], Length(strHashValue)*sizeof(strHashValue[0]), 0);
+  FillByte(strModifiedDateTime[0], Length(strModifiedDateTime)*sizeof(strModifiedDateTime[0]), 0);
+  }
   // The ALL IMPORTANT 0 return value!!
   result := 0;
 end;
@@ -1127,8 +1153,10 @@ function XT_Finalize(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved :
 const
   Buflen=2048;
 var
-  Buf, outputmessage, LoadFileOutputFolder : array[0..Buflen-1] of WideChar;
+  Buf, outputmessage : array[0..Buflen-1] of WideChar;
+  LoadFileOutputFolder : widestring;
 begin
+
   // Lookup where the output has been going
   LoadFileOutputFolder := strOutputLocation;
   // Write the CSV LoadFile to the same output location
@@ -1166,7 +1194,7 @@ exports
   XT_Init,
   XT_About,
   XT_Prepare,
-  XT_ProcessItem,
+  XT_ProcessItemEx,
   XT_Finalize,
   XT_Done,
   // I dont think the remainders need to be specifically exported so may be removed in future
@@ -1176,8 +1204,7 @@ exports
   GetHashValue,
   FileTimeToDateTime,
   CreateFolderStructure,
-  GetOutputLocation,
-  GetEvidenceObjectID;
+  GetOutputLocation;
 begin
 
 end.

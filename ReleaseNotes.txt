@@ -1,6 +1,13 @@
 RELEASE NOTES
 =============
 
+July 2020 v0.5 Alpha branch
+Now requires v20.0 Beta 5b or above due to fix applied to XWF_OpenItem when called with 0400 or 0800 flags for files that contain no text
+XWF_Close called after 2nd call to text based version of the file, whereas it was not being called in earlier versions
+StringlistUTF8's now used instead of TStringList to reduce problems with Unicode chars in output and error log. 
+Switched to XT_ProcessItemEx (instead of XT_ProcessItem) as it is specifically designed for data reading vs simply volume snapshot data reading. 
+
+
 June 2020 v0.4 Alpha
 The previously added check for OutputLocation.txt was not working, in as much as it was not being found and read. It should work now
 The Loadfile.tsv and Errorlog.txt were sometimes being prefixed by the name of the output subfolder due to missing trailing deliminator in the path. This should not happen now
