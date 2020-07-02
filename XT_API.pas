@@ -1,10 +1,10 @@
 unit XT_API;
 
-{$mode DELPHI}{$H+}
+{$MODE Delphi}
 
 interface
 
-uses Windows, dynlibs;
+uses Windows;
 
 type
 	TLicenseInfo=packed record
@@ -82,6 +82,7 @@ type
 
 type
 	TXWF_GetSize = function (hVolumeOrItem: THandle; lpOptional: Pointer): Int64; stdcall;
+        TXWF_GetProp = function (hVolumeOrItem: THandle; nPropType : DWORD; lpBuffer : PVOID) : Int64; stdcall;
 	TXWF_GetVolumeName = procedure (hVolume: THandle; lpString: PWideChar; nType: DWord); stdcall;
 	TXWF_GetVolumeInformation = procedure (hVolume: THandle; nFileSystem: PLongInt; nBytesPerSector, nSectorsPerCluster: PDWord; nClusterCount, nFirstClusterSectorNo: PInt64); stdcall;
 	TXWF_GetBlock = function (hVolumeOrItem: THandle; lpStartOfs, lpEndOfs: PInt64): BOOL; stdcall;
@@ -155,6 +156,7 @@ type
 
 var
 	XWF_GetSize: TXWF_GetSize;
+        XWF_GetProp: TXWF_GetProp;
 	XWF_GetVolumeName: TXWF_GetVolumeName;
 	XWF_GetVolumeInformation: TXWF_GetVolumeInformation;
 	XWF_GetBlock: TXWF_GetBlock;
@@ -248,7 +250,6 @@ const
 	XT_PREPARE_EXPECTMOREITEMS = $04;
 	XT_PREPARE_DONTOMIT = $08;
 	XT_PREPARE_TARGETDIRS = $10;
-        XT_PREPARE_TARGETZEROBYTEFILES = $20;
 
 const
 	XWF_CASEPROP_TITLE = 1;
@@ -375,6 +376,7 @@ begin
 	Hdl := GetModuleHandle(nil);
 
 	XWF_GetSize := GetProcAddress(Hdl, 'XWF_GetSize');
+        XWF_GetProp := GetProcAddress(Hdl, 'XWF_GetProp');
 	XWF_GetVolumeName := GetProcAddress(Hdl, 'XWF_GetVolumeName');
 	XWF_GetVolumeInformation := GetProcAddress(Hdl, 'XWF_GetVolumeInformation');
 	XWF_GetSectorContents := GetProcAddress(Hdl, 'XWF_GetSectorContents');
