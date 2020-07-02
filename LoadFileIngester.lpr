@@ -1009,9 +1009,15 @@ begin
               // Get size of the text file associated with the handle, not size of original (nItemID) file
               // Note use of XWF_GetSize, and not XWF_GetItemSize
               // This will give us the size of the text value of the file, not the size of the original file
+              // Note also XWF_GetSize is deprecated as of July 2020. Move to XWF_GetProp soon
 
               ItemSize := -1;
-              ItemSize := XWF_GetSize(hItem, nil);
+              ItemSize := XWF_GetSize(hItem, nil);        // is deprecated. Move to XWF_GetProp soon
+              // ItemSize :=  XWF_GetProp(hItem, 1, nil); // Placeholder for future adoption,
+
+              // Make InputBytesBuffer big enough to hold the text based version
+              // of the file content, which will be different to the previous call
+              SetLength(InputBytesBuffer, ItemSize);
 
               // Read the native file item as text to buffer
               if ItemSize > -1 then
@@ -1090,6 +1096,9 @@ begin
           errormessage := 'ERROR : Object with ID ' + IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID) + ' could not be accessed or processed. File handle failure.';
           lstrcpyw(Buf, errormessage);
           XWF_OutputMessage(@Buf[0], 0);
+          errormessage := '....carrying on regardless....please wait';
+          lstrcpyw(Buf, errormessage);
+          XWF_OutputMessage(@Buf[0], 0);
         end;
       end // end of item type flags check
       else // Item type was considered invalid so enter its ID to errorlog
@@ -1134,15 +1143,6 @@ begin
     errorlog.add(UniqueID + ' size was 0 bytes. Skipped.');
   end;
 
-  {
-  UniqueID := '';
-  NativeFileName := '';
-  FillByte(JoinedFilePath[0],       Length(JoinedFilePath)*sizeof(JoinedFilePath[0]), 0);
-  FillByte(OutputLocationForTEXT[0], Length(OutputLocationForTEXT)*sizeof(OutputLocationForTEXT[0]), 0);
-  FillByte(OutputLocationForNATIVE[0], Length(OutputLocationForNATIVE)*sizeof(OutputLocationForNATIVE[0]), 0);
-  FillByte(strHashValue[0], Length(strHashValue)*sizeof(strHashValue[0]), 0);
-  FillByte(strModifiedDateTime[0], Length(strModifiedDateTime)*sizeof(strModifiedDateTime[0]), 0);
-  }
   // The ALL IMPORTANT 0 return value!!
   result := 0;
 end;

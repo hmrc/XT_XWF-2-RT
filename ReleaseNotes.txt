@@ -1,12 +1,12 @@
 RELEASE NOTES
 =============
 
-July 2020 v0.5 Alpha branch
+July 2020 v0.5 Alpha
 Now requires v20.0 Beta 5b or above due to fix applied to XWF_OpenItem when called with 0400 or 0800 flags for files that contain no text
 XWF_Close called after 2nd call to text based version of the file, whereas it was not being called in earlier versions
 StringlistUTF8's now used instead of TStringList to reduce problems with Unicode chars in output and error log. 
 Switched to XT_ProcessItemEx (instead of XT_ProcessItem) as it is specifically designed for data reading vs simply volume snapshot data reading. 
-
+Fixed memory issue that was sometimes cuasing Page Protection 216 Fault by using SetLength after 2nd call to XWF_OpenItem 
 
 June 2020 v0.4 Alpha
 The previously added check for OutputLocation.txt was not working, in as much as it was not being found and read. It should work now
