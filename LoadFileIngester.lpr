@@ -61,6 +61,7 @@ uses
   const
     BufEvdNameLen=4096;
     BufLen=2048;
+
 var
   // These are global vars
   MainWnd                  : THandle;
@@ -79,7 +80,10 @@ var
   HashType                 : Int64;
   ObjectID                 : Int64;         // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
   StartTime, EndTime       : TDateTime;
-  TimeTaken, TextificationOutputPath : string;
+  TextificationOutputPath  : string;
+  strTimeTakenLocal        : string;
+  strTimeTakenGlobal       : string;    // Do not initialise to default as uses cummulative totals
+  TimeTakenGlobal          : TDateTime; // Do not initialise to default as uses cummulative totals
   OutputSubFolderNative, OutputSubFolderText, OutputFolder : array[0..Buflen-1] of WideChar;
 
   // Evidence name is global for later filesave by name
@@ -88,8 +92,24 @@ var
 // XT_Init : The first call needed by the X-Tension API. Must return 1 for the X-Tension to continue.
 function XT_Init(nVersion, nFlags: DWord; hMainWnd: THandle; lpReserved: Pointer): LongInt; stdcall; export;
 begin
-  VerReleaseIsLessThan2000 := false;
-  VerRelease2000OrAbove    := false;
+  VerRelease               := Default(LongInt);
+  ServiceRelease           := Default(Byte);
+  TotalDataInBytes         := Default(Int64);
+  HasAParent               := Default(integer);
+  RunFolderBuilderAgain    := Default(Boolean);
+  VerReleaseIsLessThan2000 := Default(Boolean);
+  VerRelease2000OrAbove    := Default(Boolean);
+  intOutputLength          := Default(integer);
+  strOutputLocation        := Default(WideString);
+  //slOutput                 := Default(TStringlistUTF8);
+  //ErrorLog                 := Default(TStringListUTF8);
+  HashType                 := Default(Int64);
+  ObjectID                 := Default(Int64);
+  StartTime                := Default(TDateTime);
+  EndTime                  := Default(TDateTime);
+  strTimeTakenLocal        := Default(string);
+  TextificationOutputPath  := Default(string);
+
   // Get high 2 bytes from nVersion
   VerRelease := Hi(nVersion);
   // Get 3rd high byte for service release. We dont need it yet but we might one day
@@ -171,7 +191,8 @@ var
   GB: QWord;
   TB: QWord;
 begin
-
+  if bytes > 0 then
+  begin
   B  := 1;         // byte
   KB := 1024 * B;  // kilobyte
   MB := 1024 * KB; // megabyte
@@ -191,6 +212,8 @@ begin
           result := FormatFloat('#.## KiB', bytes / KB)
         else
           result := FormatFloat('#.## bytes', bytes) ;
+  end
+  else result := '0 bytes';
 end;
 
 // IsValidFilename : takes a filename string pointer and checks it does not contain
@@ -201,6 +224,7 @@ var
   i : integer;
 begin
   result := true;
+  i      := Default(integer);
 
   for i := 1 to Length(s) do
    begin
@@ -231,6 +255,9 @@ var
   i : integer;
   Buf, Outputmessage : array[0..Buflen-1] of WideChar;
 begin
+  i  := Default(integer);
+  s2 := Default(unicodestring);
+
   // Make sure length of new sanatised string is equal to original string
   SetLength(s2, length(s));
 
@@ -266,7 +293,7 @@ var
   HasAHashValue   : boolean;
 begin
   result := '';
-  HashValue := '';
+  HashValue := Default(string);
   // Set the buffer to the appropriate size for the hash type
   if HashType = 7 then
   SetLength(bufHashVal, 16)  // MD5 is 128 bits, 16 bytes, so 32 hex chars produced.
@@ -280,7 +307,7 @@ begin
   // XWF_GetHashValue returns the appropriate hash value as a digest, if one exists.
   // The buffer it stores it in has to start with 0x01 for the primary hash value
   bufHashVal[0] := $01;
-  HasAHashValue := false;
+  HasAHashValue := Default(boolean);
   HasAHashValue := XWF_GetHashValue(ItemID, @bufHashVal[0]);
 
   // if a hash digest was returned, itterate it to a string
@@ -427,6 +454,7 @@ const
 var
   Buf            : array[0..BufLen-1] of WideChar;
   pBufCaseName   : array[0..Buflen-1] of WideChar;
+  outputmessage  : array[0..Buflen-1] of WideChar;
   CaseProperty, EvdSize, intEvdName: Int64;
 
 begin
@@ -448,8 +476,8 @@ begin
 
   // Get the Unique ID prefix value. We convert it to a WORD later as per the XWF_GetEvObjProp API docs.
   ObjectID := XWF_GetEvObjProp(hEvd, 3, nil);
-
-  lstrcpyw(Buf, 'Case properties established : OK');
+  outputmessage := 'Case properties established : OK, now working on ' + pBufEvdName;
+  lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
   result := true;
 end;
@@ -463,8 +491,8 @@ var
 begin
   FillChar(outputmessage, Length(outputmessage), $00);
   FillChar(Buf, Length(Buf), $00);
-  OutputFoldersCreatedOK := false;
-  EvidDataGotOK := false;
+  OutputFoldersCreatedOK := Default(boolean);
+  EvidDataGotOK := Default(boolean);
   HashType := -1;
   RunFolderBuilderAgain := true;
   if nOpType <> 4 then
@@ -484,10 +512,10 @@ begin
       // Call XT_ProcessItem for each item in the evidence object : (0x01)  : XT_PREPARE_CALLPI
       result         := XT_PREPARE_CALLPI;
 
-       StartTime     := Now;
-       outputmessage := 'X-Tension execution started at ' + FormatDateTime('DD/MM/YY HH:MM:SS',StartTime) + ' using XWF '+FormatVersionRelease(VerRelease) + '...please wait...';
-       lstrcpyw(Buf, outputmessage);
-       XWF_OutputMessage(@Buf[0], 0);
+      StartTime     := Now;
+      outputmessage := 'X-Tension execution started at ' + FormatDateTime('DD/MM/YY HH:MM:SS',StartTime) + ' using XWF '+FormatVersionRelease(VerRelease) + '...please wait...';
+      lstrcpyw(Buf, outputmessage);
+      XWF_OutputMessage(@Buf[0], 0);
 
       CurrentVolume := hVolume;            // Make sure the right column is set
 
@@ -597,7 +625,10 @@ var
   i, j : integer;
   OutputBytesBuffer : TBytes;
   begin
-    j := 0;
+    i := Default(integer);
+    j := Default(integer);
+    OutputBytesBuffer := Default(TBytes);
+
     SetLength(OutputBytesBuffer, Length(Buf));
     // itterate the buffer looking for ASCII printables
     for i := 0 to Length(Buf) - 1 do
@@ -667,21 +698,27 @@ var
     UniqueID : unicodestring;
 
 begin
+  NativeFileName       := Default(unicodestring);
+  ParentFileName       := Default(unicodestring);
+  CorrectedFilename    := Default(unicodestring);
+  FileExtension        := Default(unicodestring);
+  OutputLocationOfFile := Default(unicodestring);
+  UniqueID             := Default(unicodestring);
+
   ItemSize               := -1;
-  intBytesRead           := 0;
-  intTotalOutputLength   := 0;
-  intBreachValue         := 0;
-  intModifiedDateTime    := 0;
+  intBytesRead           := Default(integer);
+  intTotalOutputLength   := Default(integer);
+  intBreachValue         := Default(integer);
+  intModifiedDateTime    := Default(int64);
   OfficeFileReadResult   := -1;
-  hItem                  := 0;
+  hItem                  := Default(THandle);
   // Make sure buffers are empty and filled with zeroes
   // This explains why its done this way : https://forum.lazarus.freepascal.org/index.php?topic=13296.0
   FillByte(lpTypeDescr[0],       Length(lpTypeDescr)*sizeof(lpTypeDescr[0]), 0);
   FillByte(lpTypeDescrOffice[0], Length(lpTypeDescrOffice)*sizeof(lpTypeDescrOffice[0]), 0);
-  FillByte(InputBytesBuffer[0], Length(InputBytesBuffer)*sizeof(InputBytesBuffer[0]), 0);
-  FillByte(TextifiedBuffer[0], Length(TextifiedBuffer)*sizeof(TextifiedBuffer[0]), 0);
+  FillByte(InputBytesBuffer[0],  Length(InputBytesBuffer)*sizeof(InputBytesBuffer[0]), 0);
+  FillByte(TextifiedBuffer[0],   Length(TextifiedBuffer)*sizeof(TextifiedBuffer[0]), 0);
 
-  //FillByte(bufHashVal[0], Length(bufHashVal)*sizeof(bufHashVal[0]), 0);
   JoinedFilePath          := '';
   JoinedFilePathAndName   := '';
   OutputLocationForNATIVE := '';
@@ -689,9 +726,9 @@ begin
   strHashValue            := '';
   strModifiedDateTime     := '';
   TruncatedFilename       := '';
-  IsItAPicture            := false;
-  TruncatedFileFlag       := false;
-  IsItAnOfficeFile        := false;
+  IsItAPicture            := Default(Boolean);
+  TruncatedFileFlag       := Default(Boolean);
+  IsItAnOfficeFile        := Default(Boolean);
 
   // Get the size of the item
   ItemSize := XWF_GetItemSize(nItemID);
@@ -1155,28 +1192,65 @@ const
 var
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
   LoadFileOutputFolder : widestring;
+  fsPrevLoadFile, fsPrevErrorLog : TFileStreamUTF8;
 begin
+  LoadFileOutputFolder := Default(unicodestring);
+  fsPrevLoadFile := Default(TFileStreamUTF8);
+  fsPrevErrorLog := Default(TFileStreamUTF8);
 
   // Lookup where the output has been going
   LoadFileOutputFolder := strOutputLocation;
-  // Write the CSV LoadFile to the same output location
-  try
-    slOutput.SaveToFile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'LoadFile.tsv');
-  finally
-    // Free the memory used to store CSV LoadFile in RAM
-    slOutput.Free;
-  end;
+  // Write the CSV LoadFile to the same output location. Append if multiple evidence objects
+  // have been selected for export.
+  if FileExists(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'LoadFile.tsv') then
+  begin
+    try
+    fsPrevLoadFile := TFileStreamUTF8.Create(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'LoadFile.tsv', fmOpenWrite);
+    fsPrevLoadFile.Position := fsPrevLoadFile.Size;
+    slOutput.SaveToStream(fsPrevLoadFile);
+    finally
+      fsPrevLoadFile.Free;
+      slOutput.Free;
+    end;
+  end
+    else
+    try
+      slOutput.SaveToFile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'LoadFile.tsv');
+    finally
+      // Free the memory used to store CSV LoadFile in RAM
+      slOutput.Free;
+    end;
 
-  // Write the error log to the same output location
-  try
-    errorlog.savetofile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt');
-  finally
-    errorlog.free;
-  end;
+  // Write the error log to the same output location. Append if multiple evidence objects
+  // have been selected for export.
+  if FileExists(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt') then
+  begin
+    try
+    fsPrevErrorLog := TFileStreamUTF8.Create(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt', fmOpenWrite);
+    fsPrevErrorLog.Position := fsPrevErrorLog.Size;
+    errorlog.SaveToStream(fsPrevErrorLog);
+    finally
+      fsPrevErrorLog.Free;
+      errorlog.Free;
+    end;
+  end
+    else
+    try
+      errorlog.savetofile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt');
+    finally
+      errorlog.free;
+    end;
 
-  EndTime       := Now;
-  TimeTaken     := FormatDateTime('HH:MM:SS',EndTime-StartTime);
-  outputmessage := 'X-Tension execution ended at ' + FormatDateTime('DD/MM/YY HH:MM:SS',EndTime) + ', ' + FormatByteSize(TotalDataInBytes) + ' read. Time taken : ' + TimeTaken;
+  // Output finalising summary data
+  EndTime            := Now;
+  strTimeTakenLocal  := FormatDateTime('HH:MM:SS',EndTime-StartTime);   // Time for THIS evidence object
+  TimeTakenGlobal    := TimeTakenGlobal + (EndTime-StartTime);          // Time overall that the X-Tension has been running. Do not initialise to Default. Running total.
+  strTimeTakenGlobal := FormatDateTime('HH:MM:SS',TimeTakenGlobal);     // Do not initialise to Default. Running total.
+
+  outputmessage := 'X-Tension execution ended at ' + FormatDateTime('DD/MM/YY HH:MM:SS',EndTime)
+                   + ', ' + strTimeTakenLocal + ' for this evidence object. Overall time so far: '
+                   + strTimeTakenGlobal + ', ' + FormatByteSize(TotalDataInBytes) + ' read.';
+
   RunFolderBuilderAgain := true;
   lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
@@ -1186,7 +1260,15 @@ end;
 // called just before the DLL is unloaded to give XWF chance to dispose any allocated memory,
 // Should return 0.
 function XT_Done(lpReserved: Pointer) : integer; stdcall; export;
+const
+  Buflen=512;
+var
+  Buf, outputmessage : array[0..Buflen-1] of WideChar;
 begin
+  // Tell the user we are totally done.
+  outputmessage := 'FINISHED.';
+  lstrcpyw(Buf, outputmessage);
+  XWF_OutputMessage(@Buf[0], 0);
   result := 0;
 end;
 

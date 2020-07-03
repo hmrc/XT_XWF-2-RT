@@ -1,6 +1,12 @@
 RELEASE NOTES
 =============
 
+July 2020 v0.6 Alpha
+The "Time Taken" showing was the total time for the LAST evidence object, which is fine if there is only one. But if multiple evidence objects, the time taken in total needs to be displayed, and not just the time taken for the last evidence object. This version now shows the date and time each evidence object completes, with a cumulative total time displayed at the end
+Most (nearly all) variable declarations are now initialised using compiler Defaults (except those that are used itteratively). This will improve memory allocations, avoid potential heap stack issues, especially for managed types (e.g. unicodestring). 
+The LoadFile.tsv and ErrorLog.tsv were not being appended to in the case of multiple evidence objects. So if the user requests data from 2 or more evidence objects, it will now append the results from 2nd to 1st, whereas before the results of 1 were being overwritten by the results of 2. 
+If the total bytes read is zero, that is now displayed in the messages window, whereas before FormatByteSize returned "bytes bytes" instead of "0 bytes"
+
 July 2020 v0.5 Alpha
 Now requires v20.0 Beta 5b or above due to fix applied to XWF_OpenItem when called with 0400 or 0800 flags for files that contain no text
 XWF_Close called after 2nd call to text based version of the file, whereas it was not being called in earlier versions
