@@ -1,6 +1,13 @@
 RELEASE NOTES
 =============
 
+July 2020 v0.7 Alpha
+Upon completion, the X-Tension will now total how many files were selected, how many exported natively, and how many exported as text
+Refinements to how variables are initialised, opting for at point of declaration rather than within the functions executions
+Removed functions from export section that do not require exporting for the DLL to function. Safer code execution (as I understand it)
+Moved filename truncation to its own function, TruncLongFilename
+Ensured ErrorLog.txt was populated by failures to get handle to native files (already does this for text based file nadle failures)
+
 July 2020 v0.6 Alpha
 The "Time Taken" showing was the total time for the LAST evidence object, which is fine if there is only one. But if multiple evidence objects, the time taken in total needs to be displayed, and not just the time taken for the last evidence object. This version now shows the date and time each evidence object completes, with a cumulative total time displayed at the end
 Most (nearly all) variable declarations are now initialised using compiler Defaults (except those that are used itteratively). This will improve memory allocations, avoid potential heap stack issues, especially for managed types (e.g. unicodestring). 

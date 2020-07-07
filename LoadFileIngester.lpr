@@ -63,53 +63,41 @@ uses
     BufLen=2048;
 
 var
-  // These are global vars
+  // These are global vars, initialised using Default declarations where possible
+  // for optimum memory management
   MainWnd                  : THandle;
   CurrentVolume            : THandle;
-  VerRelease               : LongInt;
-  ServiceRelease           : Byte;
-  TotalDataInBytes         : Int64;
-  HasAParent               : integer;
-  RunFolderBuilderAgain    : Boolean;
-  VerReleaseIsLessThan2000 : Boolean;
-  VerRelease2000OrAbove    : Boolean;
-  intOutputLength          : integer;
-  strOutputLocation        : WideString;
+  VerRelease               : LongInt = Default(LongInt);
+  ServiceRelease           : Byte    = Default(Byte);
+  TotalDataInBytes         : Int64   = Default(Int64);
+  HashType                 : Int64   = Default(Int64);
+  ObjectID                 : Int64   = Default(Int64);  // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
+  intOutputLength          : integer = Default(integer);
+  HasAParent               : integer = Default(integer);
+  TotalCounterNativeFiles  : integer = Default(integer);
+  TotalCounterTextFiles    : integer = Default(integer);
+  SelectedItemsCounter     : integer = Default(integer);
+  RunFolderBuilderAgain    : Boolean = Default(Boolean);
+  VerReleaseIsLessThan2000 : Boolean = Default(Boolean);
+  VerRelease2000OrAbove    : Boolean = Default(Boolean);
+  TextificationOutputPath  : string  = Default(string);
+  strTimeTakenLocal        : string  = Default(string);
+  strTimeTakenGlobal       : string  = Default(string);
+  strOutputLocation        : WideString = Default(WideString);
   slOutput                 : TStringlistUTF8;
   ErrorLog                 : TStringListUTF8;
-  HashType                 : Int64;
-  ObjectID                 : Int64;         // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
-  StartTime, EndTime       : TDateTime;
-  TextificationOutputPath  : string;
-  strTimeTakenLocal        : string;
-  strTimeTakenGlobal       : string;    // Do not initialise to default as uses cummulative totals
-  TimeTakenGlobal          : TDateTime; // Do not initialise to default as uses cummulative totals
+  StartTime                : TDateTime = Default(TDateTime);
+  EndTime                  : TDateTime = Default(TDateTime);
+  TimeTakenGlobal          : TDateTime = Default(TDateTime);
+
   OutputSubFolderNative, OutputSubFolderText, OutputFolder : array[0..Buflen-1] of WideChar;
 
-  // Evidence name is global for later filesave by name
+  // Evidence name is global for later use by name
   pBufEvdName              : array[0..BufEvdNameLen-1] of WideChar;
 
 // XT_Init : The first call needed by the X-Tension API. Must return 1 for the X-Tension to continue.
 function XT_Init(nVersion, nFlags: DWord; hMainWnd: THandle; lpReserved: Pointer): LongInt; stdcall; export;
 begin
-  VerRelease               := Default(LongInt);
-  ServiceRelease           := Default(Byte);
-  TotalDataInBytes         := Default(Int64);
-  HasAParent               := Default(integer);
-  RunFolderBuilderAgain    := Default(Boolean);
-  VerReleaseIsLessThan2000 := Default(Boolean);
-  VerRelease2000OrAbove    := Default(Boolean);
-  intOutputLength          := Default(integer);
-  strOutputLocation        := Default(WideString);
-  //slOutput                 := Default(TStringlistUTF8);
-  //ErrorLog                 := Default(TStringListUTF8);
-  HashType                 := Default(Int64);
-  ObjectID                 := Default(Int64);
-  StartTime                := Default(TDateTime);
-  EndTime                  := Default(TDateTime);
-  strTimeTakenLocal        := Default(string);
-  TextificationOutputPath  := Default(string);
-
   // Get high 2 bytes from nVersion
   VerRelease := Hi(nVersion);
   // Get 3rd high byte for service release. We dont need it yet but we might one day
@@ -221,10 +209,9 @@ end;
 // it returns false. True otherwise
 function IsValidFilename(s : unicodestring) : boolean;  stdcall; export;
 var
-  i : integer;
+  i : integer = Default(integer);
 begin
   result := true;
-  i      := Default(integer);
 
   for i := 1 to Length(s) do
    begin
@@ -251,13 +238,10 @@ function SanitiseFilename(s : unicodestring) : unicodestring;
 const
   BufLen=2048;
 var
-  s2 :  unicodestring;
-  i : integer;
+  s2 : unicodestring = Default(unicodestring);
+  i  : integer = Default(integer);
   Buf, Outputmessage : array[0..Buflen-1] of WideChar;
 begin
-  i  := Default(integer);
-  s2 := Default(unicodestring);
-
   // Make sure length of new sanatised string is equal to original string
   SetLength(s2, length(s));
 
@@ -287,13 +271,13 @@ end;
 // Returns empty string on failure.
 function GetHashValue(ItemID : LongWord) : string ; stdcall; export;
 var
-  i               : integer;
+  i               : integer = Default(integer);
+  HashValue       : string  = Default(string);
+  HasAHashValue   : Boolean = Default(boolean);
   bufHashVal      : array of Byte;
-  HashValue       : string;
-  HasAHashValue   : boolean;
 begin
-  result := '';
-  HashValue := Default(string);
+  result := Default(string);
+
   // Set the buffer to the appropriate size for the hash type
   if HashType = 7 then
   SetLength(bufHashVal, 16)  // MD5 is 128 bits, 16 bytes, so 32 hex chars produced.
@@ -307,7 +291,6 @@ begin
   // XWF_GetHashValue returns the appropriate hash value as a digest, if one exists.
   // The buffer it stores it in has to start with 0x01 for the primary hash value
   bufHashVal[0] := $01;
-  HasAHashValue := Default(boolean);
   HasAHashValue := XWF_GetHashValue(ItemID, @bufHashVal[0]);
 
   // if a hash digest was returned, itterate it to a string
@@ -337,7 +320,7 @@ function ExtractFileFromZip(ZipName : string) : string;
 var
   UnZipper: TUnZipper;
 begin
-  result := '';
+  result := Default(string);
   UnZipper := TUnZipper.Create;
   try
     // Unzip the office file to the path declared by TextificationOutputPath
@@ -364,11 +347,12 @@ const
   BufLen=2048;
 var
   UserFile  : Text;
-  FileName, TFile   : Unicodestring;
+  FileName  : Unicodestring = Default(UnicodeString);
+  TFile     : Unicodestring = Default(UnicodeString);
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
 
 begin
-  result              := '';
+  result              := Default(widestring);
   intOutputLength     := 0;
   outputmessage := '';
   FillChar(outputmessage, Length(outputmessage), $00);
@@ -417,7 +401,7 @@ begin
   outputmessage := '';
   FillChar(outputmessage, Length(outputmessage), $00);
   FillChar(Buf, Length(Buf), $00);
-  result                := false;
+  result                := Default(boolean);
   OutputSubFolderNative := IncludeTrailingPathDelimiter(RootOutputFolderName) + 'NATIVE';
   OutputSubFolderText   := IncludeTrailingPathDelimiter(RootOutputFolderName) + 'TEXT';
 
@@ -487,14 +471,15 @@ end;
 function XT_Prepare(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved : Pointer) : integer; stdcall; export;
 var
   outputmessage, Buf, tempdir  : array[0..MAX_PATH] of WideChar;
-  OutputFoldersCreatedOK, EvidDataGotOK : boolean;
+  OutputFoldersCreatedOK : boolean = Default(boolean);
+  EvidDataGotOK          : boolean = Default(boolean);
 begin
   FillChar(outputmessage, Length(outputmessage), $00);
   FillChar(Buf, Length(Buf), $00);
-  OutputFoldersCreatedOK := Default(boolean);
-  EvidDataGotOK := Default(boolean);
+  result := Default(integer);
   HashType := -1;
   RunFolderBuilderAgain := true;
+
   if nOpType <> 4 then
   begin
     MessageBox(MainWnd, 'Error: ' +
@@ -622,13 +607,10 @@ end;
 function RunTextification(Buf : TBytes) : TBytes;
 var
   // 2 billion bytes is 2Gb, so unless user processes a docx > 2Gb, integer should be OK
-  i, j : integer;
-  OutputBytesBuffer : TBytes;
+  i : integer = Default(integer);
+  j : integer = Default(integer);
+  OutputBytesBuffer : TBytes = nil;
   begin
-    i := Default(integer);
-    j := Default(integer);
-    OutputBytesBuffer := Default(TBytes);
-
     SetLength(OutputBytesBuffer, Length(Buf));
     // itterate the buffer looking for ASCII printables
     for i := 0 to Length(Buf) - 1 do
@@ -653,6 +635,22 @@ var
       end; // buffer itteration ends
     result := OutputBytesBuffer;
   end;
+
+// TruncFilename returns filesystem friendly filename of suitable length as unicodestring.
+// It takes a filename along with the value of how much the max_path length is breached by
+// and returns the name truncated by breach value. Empty unicodestring on failure
+function TruncLongFilename(LongFilename : unicodestring; intBreachValue : integer) : unicodestring; stdcall; export;
+var
+  FileExtension : unicodestring = Default(unicodestring);
+  TruncatedFilename : array[0..Buflen-1] of WideChar;
+begin
+  result := Default(Unicodestring);
+  // Get the file extension
+  FileExtension := ExtractFileExt(LongFilename);
+  // Now copy what should be a valid lengthed and truncated filename, with extension
+  StrPLCopy(TruncatedFilename, LongFilename, intBreachValue);
+  result := TruncatedFilename + FileExtension;
+end;
 
 // XT_ProcessItem : Examines each item in the selected evidence object. The "type category" of the item
 // is then added to a string list for traversal later. Must return 0! -1 if fails.
@@ -694,14 +692,13 @@ var
   // XWF_GetFileName returns a pointer to a null terminated widechar. It decides what array to return
   // However, using UnicodeStrings is more generally advised in FPC as memory handling is taken
   // care of automatically by the compiler, thus avoiding the need for New() and Dispose()
-  NativeFileName, ParentFileName, CorrectedFilename, FileExtension, OutputLocationOfFile,
+  NativeFileName, ParentFileName, CorrectedFilename, OutputLocationOfFile,
     UniqueID : unicodestring;
 
 begin
   NativeFileName       := Default(unicodestring);
   ParentFileName       := Default(unicodestring);
   CorrectedFilename    := Default(unicodestring);
-  FileExtension        := Default(unicodestring);
   OutputLocationOfFile := Default(unicodestring);
   UniqueID             := Default(unicodestring);
 
@@ -727,8 +724,10 @@ begin
   strModifiedDateTime     := '';
   TruncatedFilename       := '';
   IsItAPicture            := Default(Boolean);
-  TruncatedFileFlag       := Default(Boolean);
   IsItAnOfficeFile        := Default(Boolean);
+  TruncatedFileFlag       := Default(Boolean);
+
+  inc(SelectedItemsCounter, 1);
 
   // Get the size of the item
   ItemSize := XWF_GetItemSize(nItemID);
@@ -821,17 +820,11 @@ begin
           // and truncate it by that amount, called the BreachValue
           if intTotalOutputLength > 255 then
           begin
-            intBreachValue := intTotalOutputLength - 255;
-            // Get the file extension before we lose it all together during truncation
-            FileExtension := ExtractFileExt(NativeFileName);
-            // Now copy what should be a valid lengthed and truncated filename, with extension
-            StrPLCopy(TruncatedFilename, NativeFileName, 255-intBreachValue);
-            TruncatedFilename := TruncatedFilename + FileExtension;
+            TruncatedFilename := TruncLongFilename(NativeFileName, (intTotalOutputLength - 255));
             TruncatedFileFlag := true;
           end;
 
           // Export the original (aka native) file to the output folder, and that might be a shorter version than original
-
           try
             OutputStreamNative := nil;
             if (FilenameLegal = true) and (TruncatedFileFlag = false) then
@@ -896,6 +889,10 @@ begin
                   errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + ' could not be written to disk. FileStream write error.';
                   lstrcpyw(Buf, errormessage);
                   XWF_OutputMessage(@Buf[0], 0);
+                end
+              else
+                begin
+                  inc(TotalCounterNativeFiles, 1);
                 end;
               OutputStreamNative.Free;
             end;
@@ -1010,7 +1007,11 @@ begin
                   errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
                   lstrcpyw(Buf, errormessage);
                   XWF_OutputMessage(@Buf[0], 0);
-                end;
+                end
+                else
+                  begin
+                    inc(TotalCounterTextFiles, 1);
+                  end;
               finally
                 OutputStreamText.Free;
                 // Define the outputs of the files for the load file itself
@@ -1098,7 +1099,11 @@ begin
                     errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
                     lstrcpyw(Buf, errormessage);
                     XWF_OutputMessage(@Buf[0], 0);
-                  end;
+                  end
+                  else
+                    begin
+                      inc(TotalCounterTextFiles, 1);
+                    end;
                 finally
                   OutputStreamText.Free;
                   // Define the outputs of the files for the load file itself
@@ -1115,7 +1120,7 @@ begin
             else
             begin // Alert the user that a viewer component view of the file could not be painted
               errorlog.add(UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read cannot be obtained. No text? Encrypted? Corrupt?');
-              errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read of it cannot be obtained. Encrypted? Corrupt?';
+              errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read of it cannot be obtained. No text? Encrypted? Corrupt?';
               lstrcpyw(Buf, errormessage);
               XWF_OutputMessage(@Buf[0], 0);
               errormessage := '....carrying on regardless....please wait';
@@ -1127,10 +1132,12 @@ begin
           // Finalise output to the Loadfile for this Item
           // Populate the loadfile, using Unicode TAB character value. Not comma, because sometimes e-mail attachments contain comma in the name
           slOutput.Add(UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
-        end  // end of first XWF_OpenItem
+        end  // end of first XWF_OpenItem to native file
         else // Alert the user that the native file could not handled
         begin
-          errormessage := 'ERROR : Object with ID ' + IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID) + ' could not be accessed or processed. File handle failure.';
+          UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
+          errorlog.add(UniqueID + ' could not be accessed by XWF at all using this X-Tension. File handle initiatation failed.');
+          errormessage := 'ERROR : ' + UniqueID + ' could not be accessed at all by XWF using this X-Tension. File handle initiatation failed';
           lstrcpyw(Buf, errormessage);
           XWF_OutputMessage(@Buf[0], 0);
           errormessage := '....carrying on regardless....please wait';
@@ -1191,10 +1198,9 @@ const
   Buflen=2048;
 var
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
-  LoadFileOutputFolder : widestring;
+  LoadFileOutputFolder : widestring = Default(widestring);
   fsPrevLoadFile, fsPrevErrorLog : TFileStreamUTF8;
 begin
-  LoadFileOutputFolder := Default(unicodestring);
   fsPrevLoadFile := Default(TFileStreamUTF8);
   fsPrevErrorLog := Default(TFileStreamUTF8);
 
@@ -1266,7 +1272,9 @@ var
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
 begin
   // Tell the user we are totally done.
-  outputmessage := 'FINISHED.';
+  outputmessage := 'FINISHED. ' + IntToStr(SelectedItemsCounter)    + ' items selected. '
+                                + IntToStr(TotalCounterNativeFiles) + ' native files exported and '
+                                + IntToStr(TotalCounterTextFiles)   + ' text versions exported.';
   lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
   result := 0;
@@ -1278,15 +1286,7 @@ exports
   XT_Prepare,
   XT_ProcessItemEx,
   XT_Finalize,
-  XT_Done,
-  // I dont think the remainders need to be specifically exported so may be removed in future
-  TimeStampIt,
-  FormatByteSize,
-  IsValidFilename,
-  GetHashValue,
-  FileTimeToDateTime,
-  CreateFolderStructure,
-  GetOutputLocation;
+  XT_Done;
 begin
 
 end.
