@@ -900,13 +900,13 @@ begin
             begin
               // if it's an e-mail, convert it to PDF first
               // REMOVE THIS BEGIN END OF EXPORT TO PDF NOT VIABLE
-              if (lpTypeDescr = 'E-mail') then
+              {if (lpTypeDescr = 'E-mail') then
               begin
                 XWF_Close(hItem);
                 hItem := XWF_OpenItem(CurrentVolume, nItemID, $0200);
                 ItemSize := XWF_GetSize(hItem, nil);
                 SetLength(InputBytesBuffer, ItemSize);
-              end;
+              end;   }
               // Read the native file item to buffer
               intBytesRead := XWF_Read(hItem, 0, @InputBytesBuffer[0], ItemSize);
               // Write the native file out to disk using the above declared stream
