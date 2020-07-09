@@ -1,4 +1,4 @@
-# XT_XWF-2-RT (X-Ways Forensics to Relativity Injestion X-Tension)
+# XT_XWF-2-RT (X-Ways Forensics to Relativity Ingestion X-Tension)
 
 ###  *** Requirements ***
   This X-Tension is designed for use only with X-Ways Forensics.
@@ -16,7 +16,7 @@
   The user must execute it by right clicking the required files and then "Run X-Tensions".
   By default, the generated output will be written to C:\Temp\RelativityOutput but as of v0.8 Alpha, the user is asked and can override
   If the path stated does not exist it will be created. 
-  Upon completion, the output can be injested into Relativity.
+  Upon completion, the output can be ingested into Relativity.
 
 ###  TODOs
      
