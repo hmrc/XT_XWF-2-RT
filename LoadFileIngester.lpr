@@ -77,7 +77,7 @@ var
   TotalCounterNativeFiles  : integer = Default(integer);
   TotalCounterTextFiles    : integer = Default(integer);
   SelectedItemsCounter     : integer = Default(integer);
-  RunFolderBuilderAgain    : Boolean = Default(Boolean);
+  RunFolderBuilder         : Boolean = true;
   VerReleaseIsLessThan2000 : Boolean = Default(Boolean);
   VerRelease2000OrAbove    : Boolean = Default(Boolean);
   TextificationOutputPath  : string  = Default(string);
@@ -339,24 +339,40 @@ begin
   end;
 end;
 
-// GetOutputLocation : Open OutputLocation.txt and get the path from line 1 and
-// return that string. Or return c:\temp\relativityoutput if missing.
+// GetOutputLocation : Gets the output location; i.e. where to put the LoadFile data
 // Returns empty string on failure
 function GetOutputLocation() : widestring; stdcall; export;
 const
   BufLen=2048;
 var
-  UserFile  : Text;
+  {UserFile  : Text;
   FileName  : Unicodestring = Default(UnicodeString);
-  TFile     : Unicodestring = Default(UnicodeString);
+  TFile     : Unicodestring = Default(UnicodeString);}
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
+  UsersSpecifiedPath : array[0..Buflen-1] of WideChar;
 
 begin
   result              := Default(widestring);
   intOutputLength     := 0;
   outputmessage := '';
   FillChar(outputmessage, Length(outputmessage), $00);
+  FillChar(UsersSpecifiedPath, Length(UsersSpecifiedPath), $00);
   FillChar(Buf, Length(Buf), $00);
+
+  // Set default output location
+  UsersSpecifiedPath := 'C:\temp\RelativityOutput';
+
+  // Ask XWF to ask the user if s\he wants to override that default location
+  XWF_GetUserInput('Specify output path', UsersSpecifiedPath, Length(UsersSpecifiedPath), $00000002);
+
+  // Return the path location, whatever it may be
+  result            := UTF8ToUTF16(UsersSpecifiedPath);
+  strOutputLocation := result;
+  intOutputLength   := Length(strOutputLocation);
+  outputmessage     := 'Output location set to : ' + strOutputLocation;
+  lstrcpyw(Buf, outputmessage);
+  XWF_OutputMessage(@Buf[0], 0);
+  {
   FileName            := 'OutputLocation.txt'; // this file needs to be in same folder as the DLL
 
   // If an OutputLocation.txt file exists in same folder as the DLL the user
@@ -364,7 +380,7 @@ begin
   if FileExists(FileName) then
   begin
     Assign(UserFile, FileName);
-    Reset(UserFile); { 'Reset' means open the file x and reset cursor to the beginning of file }
+    Reset(UserFile); // 'Reset' means open the file x and reset cursor to the beginning of file
     Repeat
       Readln(UserFile,TFile);
     Until Eof(UserFile);
@@ -387,7 +403,7 @@ begin
     lstrcpyw(Buf, outputmessage);
     XWF_OutputMessage(@Buf[0], 0);
   end;
-  strOutputLocation := result;
+  strOutputLocation := result; }
 end;
 
 // CreateFolderStructure : CreateFolderStructure creates the output folders for the data to live in
@@ -424,7 +440,7 @@ begin
   lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
 
-  RunFolderBuilderAgain := false; // prevent execution of this function for remainder of file items
+  RunFolderBuilder := false; // prevent execution of this function for remainder of file items
   result := true;
 end;
 
@@ -478,7 +494,7 @@ begin
   FillChar(Buf, Length(Buf), $00);
   result := Default(integer);
   HashType := -1;
-  RunFolderBuilderAgain := true;
+  //RunFolderBuilder := true;
 
   if nOpType <> 4 then
   begin
@@ -496,11 +512,6 @@ begin
       // We can change the result using or combinations as we need, as follows:
       // Call XT_ProcessItem for each item in the evidence object : (0x01)  : XT_PREPARE_CALLPI
       result         := XT_PREPARE_CALLPI;
-
-      StartTime     := Now;
-      outputmessage := 'X-Tension execution started at ' + FormatDateTime('DD/MM/YY HH:MM:SS',StartTime) + ' using XWF '+FormatVersionRelease(VerRelease) + '...please wait...';
-      lstrcpyw(Buf, outputmessage);
-      XWF_OutputMessage(@Buf[0], 0);
 
       CurrentVolume := hVolume;            // Make sure the right column is set
 
@@ -591,14 +602,22 @@ begin
 
       // Assign export locations for TEXT, IMAGES and a folder for NATIVE files
       // as defined in the OutputLocation.txt file
-      OutputFolder          := GetOutputLocation;
-      if DirectoryExists(OutputFolder) = false then ForceDirectories(OutputFolder);
-      OutputFoldersCreatedOK:= CreateFolderStructure(OutputFolder);
-      if OutputFoldersCreatedOK then
+      if RunFolderBuilder = true then
       begin
-        OutputSubFolderNative := IncludeTrailingPathDelimiter(OutputFolder) + 'NATIVE';
-        OutputSubFolderText   := IncludeTrailingPathDelimiter(OutputFolder) + 'TEXT';
+        OutputFolder          := GetOutputLocation;
+        if DirectoryExists(OutputFolder) = false then ForceDirectories(OutputFolder);
+        OutputFoldersCreatedOK:= CreateFolderStructure(OutputFolder);
+        if OutputFoldersCreatedOK then
+        begin
+          OutputSubFolderNative := IncludeTrailingPathDelimiter(OutputFolder) + 'NATIVE';
+          OutputSubFolderText   := IncludeTrailingPathDelimiter(OutputFolder) + 'TEXT';
+        end;
       end;
+      // Start the timer now, as all user input and actions collected
+      StartTime     := Now;
+      outputmessage := 'X-Tension execution started at ' + FormatDateTime('DD/MM/YY HH:MM:SS',StartTime) + ' using XWF '+FormatVersionRelease(VerRelease) + '...please wait...';
+      lstrcpyw(Buf, outputmessage);
+      XWF_OutputMessage(@Buf[0], 0);
     end;
 end;
 
@@ -879,6 +898,15 @@ begin
             // the source and write it out to the stream
             if assigned(OutputStreamNative) then
             begin
+              // if it's an e-mail, convert it to PDF first
+              // REMOVE THIS BEGIN END OF EXPORT TO PDF NOT VIABLE
+              if (lpTypeDescr = 'E-mail') then
+              begin
+                XWF_Close(hItem);
+                hItem := XWF_OpenItem(CurrentVolume, nItemID, $0200);
+                ItemSize := XWF_GetSize(hItem, nil);
+                SetLength(InputBytesBuffer, ItemSize);
+              end;
               // Read the native file item to buffer
               intBytesRead := XWF_Read(hItem, 0, @InputBytesBuffer[0], ItemSize);
               // Write the native file out to disk using the above declared stream
@@ -1257,7 +1285,7 @@ begin
                    + ', ' + strTimeTakenLocal + ' for this evidence object. Overall time so far: '
                    + strTimeTakenGlobal + ', ' + FormatByteSize(TotalDataInBytes) + ' read.';
 
-  RunFolderBuilderAgain := true;
+  RunFolderBuilder := false;
   lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
   result := 0;

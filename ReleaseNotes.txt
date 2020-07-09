@@ -1,6 +1,9 @@
 RELEASE NOTES
 =============
 
+July 2020 v0.8 Alpha
+No longer the need for an OutputLocation.txt file to get a custom path. XWF will ask the user for an output location
+
 July 2020 v0.7 Alpha
 Upon completion, the X-Tension will now total how many files were selected, how many exported natively, and how many exported as text
 Refinements to how variables are initialised, opting for at point of declaration rather than within the functions executions

@@ -147,6 +147,7 @@ type
 	TXWF_GetEvent = function (EventNo: DWord; EvtInfo: PEventInfo): DWord; stdcall;
 
 	TXWF_OutputMessage = procedure (lpMessage: PWideChar; nFlags: DWord); stdcall;
+        TXWF_GetUserInput = procedure(lpMessage : LPWSTR; lpBuffer : LPWSTR; nBufferLen : DWORD; nFlags : DWORD); stdcall;
 	TXWF_ShowProgress = procedure (lpCaption: PWideChar; nFlags: DWord); stdcall;
 	TXWF_SetProgressPercentage = procedure (nPercent: DWord); stdcall;
 	TXWF_SetProgressDescription = procedure (lpStr: PWideChar); stdcall;
@@ -222,6 +223,7 @@ var
 	XWF_GetEvent: TXWF_GetEvent;
 
 	XWF_OutputMessage: TXWF_OutputMessage;
+        XWF_GetUserInput : TXWF_GetUserInput;
 	XWF_ShowProgress: TXWF_ShowProgress;
 	XWF_SetProgressPercentage: TXWF_SetProgressPercentage;
 	XWF_SetProgressDescription: TXWF_SetProgressDescription;
@@ -438,7 +440,8 @@ begin
 	XWF_GetEvent := GetProcAddress(Hdl, 'XWF_GetEvent');
 
 	XWF_OutputMessage := GetProcAddress(Hdl, 'XWF_OutputMessage');
-	XWF_ShowProgress := GetProcAddress(Hdl, 'XWF_ShowProgress');
+        XWF_GetUserInput  := GetProcAddress(Hdl, 'XWF_GetUserInput');
+	XWF_ShowProgress  := GetProcAddress(Hdl, 'XWF_ShowProgress');
 	XWF_SetProgressPercentage := GetProcAddress(Hdl, 'XWF_SetProgressPercentage');
 	XWF_SetProgressDescription := GetProcAddress(Hdl, 'XWF_SetProgressDescription');
 	XWF_ShouldStop := GetProcAddress(Hdl, 'XWF_ShouldStop');

@@ -23,13 +23,13 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <HostApplicationFilename Value="C:\Users\ted\Desktop\X-Ways Forensics\xwb64.exe"/>
+        <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics\xwb64.exe"/>
       </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
         <Mode0 Name="default">
           <local>
-            <HostApplicationFilename Value="C:\Users\ted\Desktop\X-Ways Forensics\xwb64.exe"/>
+            <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics\xwb64.exe"/>
           </local>
         </Mode0>
       </Modes>
