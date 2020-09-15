@@ -56,6 +56,7 @@ uses
   dateutils,
   contnrs,
   FileUtil,
+  Character,     // So we can check string values are digits
   Zipper;        // To enable exploration of compound Office files
 
   const
@@ -94,6 +95,9 @@ var
 
   // Evidence name is global for later use by name
   pBufEvdName              : array[0..BufEvdNameLen-1] of WideChar;
+
+  ControlNumberPrefixDigit_GlobalIncrementor : integer = Default(integer);
+  ControlNumberPrefix_Global : widestring = Default(Widestring);
 
 // XT_Init : The first call needed by the X-Tension API. Must return 1 for the X-Tension to continue.
 function XT_Init(nVersion, nFlags: DWord; hMainWnd: THandle; lpReserved: Pointer): LongInt; stdcall; export;
@@ -339,6 +343,7 @@ begin
   end;
 end;
 
+
 // GetOutputLocation : Gets the output location; i.e. where to put the LoadFile data
 // Returns empty string on failure
 function GetOutputLocation() : widestring; stdcall; export;
@@ -482,11 +487,80 @@ begin
   result := true;
 end;
 
+// Gets the users desired base Control Number prefix name, e.g. SMITH001
+// Returns empty widestring on failure. UTF16 Widestring otherwise.
+function GetControlNumberPrefixName() : widestring; stdcall; export;
+const
+  BufLen = 255;
+var
+  ControlNumberPrefixName : array[0..Buflen-1] of Widechar;
+begin
+  result := '';
+  // Get the Control Number prefix. Usually this is a seizure ref, as text, e.g. SMITH001.
+  // Value is desriable, but not enforced (thus $00000002)
+  ControlNumberPrefixName  := '';
+  XWF_GetUserInput('Specify exhibit ref. e.g. SMITH001', @ControlNumberPrefixName, Length(ControlNumberPrefixName), $00000002);
+  result := UTF8toUTF16(ControlNumberPrefixName);
+  ControlNumberPrefix_Global := result;
+end;
+
+// Gets the Control Number prefix starting digit that the user wishes to start from.
+// e.g. 1 or 79, to form "SMITH001-1-" or "SMITH001-79-".
+// Returns empty widestring on failure. UTF16 Widestring otherwise.
+function GetControlNumberPrefixDigit() : widestring; stdcall; export;
+const
+  BufLen = 255;
+var
+  lpBuff : array[0..Buflen-1] of Widechar;
+  PrefixDigit : int64 = Default(int64);
+begin
+  result := '';
+  //FillChar(ControlNumberPrefixDigit, Length(ControlNumberPrefixDigit), #0);
+  //ControlNumberPrefixDigit := '';
+  lpBuff[0] := #0; // NULL char is required by XWF_GetUserInput
+  lpBuff[1] := #0; // NULL char is required by XWF_GetUserInput
+
+  // Value must be entered as an integer digit so enforced ($00000001)
+  // Only proceed if user enters a proper number
+  PrefixDigit := XWF_GetUserInput('Specify Control Number starting DIGIT (commonly "1")', @lpBuff, 0, $00000001);
+  // Set the global counter to start from what the user has specified, e.g. '5'
+  ControlNumberPrefixDigit_GlobalIncrementor := PrefixDigit;
+  // return the digit as a widestring
+  result := UTF8toUTF16(IntToStr(PrefixDigit));
+end;
+
+// Returns a Control Number Prefix of, for example 'SMITH001-1-' or empty widestring on failure
+function BuildControlNumberPrefix() : widestring; stdcall; export;
+var
+  strPrefixName, strPrefixDigit : widestring;
+begin
+  result := '';
+  strPrefixName                 := GetControlNumberPrefixName;  // Set the pre-digit value, e.g. SMITH001
+  strPrefixDigit                := GetControlNumberPrefixDigit; // Set the postname value, e.g. -1-
+  ControlNumberPrefix_Global    := strPrefixName;               // Set the pre-digit value globally (e.g. SMITH001) as a base value
+  result := UTF8toUTF16(strPrefixName + '-' + strPrefixDigit + '-');         // Return 'SMITH001-1-' or 'SMITH001-79-', whatever the user wants to start from
+end;
+
+// Takes the existing base control number value (e.g. SMITH001) and the value to increment it by
+// to take SMITH001-1- up to SMITH002-2- etc and so on
+function IncrementControlNumberPrefix(NewValue : integer) : widestring; stdcall; export;
+var
+  CurrentNamePrefix : Widestring = Default(widestring);
+  NewPrefix         : Widestring = Default(widestring);
+begin
+ result := '';
+ CurrentNamePrefix := ControlNumberPrefix_Global;      // Get the global prefix, e.g. 'SMITH001'
+ NewPrefix := '-' + IntToStr(NewValue) + '-';          // e.g '-1-';
+ result := UTF8toUTF16(CurrentNamePrefix + NewPrefix); // Return SMITH001-1-, SMITH001-2- etc
+end;
 
 // XT_Prepare : used for every evidence object involved in execution
 function XT_Prepare(hVolume, hEvidence : THandle; nOpType : DWord; lpReserved : Pointer) : integer; stdcall; export;
+const
+  BufLen=255;
 var
   outputmessage, Buf, tempdir  : array[0..MAX_PATH] of WideChar;
+  ControlNumberPrefix : widestring;
   OutputFoldersCreatedOK : boolean = Default(boolean);
   EvidDataGotOK          : boolean = Default(boolean);
 begin
@@ -552,7 +626,8 @@ begin
         // Hash                  | in Relativity is the computed hash from XWF
         // Primary Date          | in Relativity is the Modified Date value from XWF
         // NATIVE Filepath       | is the relative file path of the exported original file
-        slOutput.Add('Control Number'+#09+
+        slOutput.Add('RT Control Number'+#09+
+                     'XWF UniqueID'+#09+
                      'Primary Document Name'+#09+
                      'Path'+#09+
                      'Extracted Text'+#09+
@@ -613,6 +688,15 @@ begin
           OutputSubFolderText   := IncludeTrailingPathDelimiter(OutputFolder) + 'TEXT';
         end;
       end;
+
+      // Get the starting prefix for the Control Number. This is to ensure that
+      // if a user conducts several exports for one Relativity "case", there are no
+      // conficlts of UniqueID from XWF. Because, whilst an ID will always be
+      // unique to XWF, when throwing data from multiple items into Relativity,
+      // you will likely have multiple "0-1234" and "1-1234"
+      ControlNumberPrefix := BuildControlNumberPrefix();
+
+
       // Start the timer now, as all user input and actions collected
       StartTime     := Now;
       outputmessage := 'X-Tension execution started at ' + FormatDateTime('DD/MM/YY HH:MM:SS',StartTime) + ' using XWF '+FormatVersionRelease(VerRelease) + '...please wait...';
@@ -683,6 +767,8 @@ var
     OutputLocationForNATIVE, OutputLocationForTEXT, JoinedFilePath,
     JoinedFilePathAndName, OutputFileText,  strModifiedDateTime, UnzipLocation,
     OfficeFileName : array[0..Buflen-1] of WideChar;
+
+  ControlNumberPrefix : widestring;
 
   // 32-bit integers
    itemtypeinfoflag, itemtypeinfoflagOfficeFile, intBytesRead, parentCounter, intLengthOfOutputFolder,
@@ -812,6 +898,14 @@ begin
           // and the ItemID from the XWF case, e.g. 0-1468 where 0 = partition and 1468 = itemID.
 
           UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
+
+          // Set, and then increase the Global Control Number digit.
+          // The first item will take the value from what the user input, and it
+          // will then be increased for every item. So if the starting val is 5,
+          // the first item will be SMITH001-5- followed by Unique ID, and then next
+          // will be SMITH001-6- followed by Unique ID, etc.
+          ControlNumberPrefix := IncrementControlNumberPrefix(ControlNumberPrefixDigit_GlobalIncrementor);
+          inc(ControlNumberPrefixDigit_GlobalIncrementor, 1);
 
           // Get the hash value, if one exists.
           strHashValue := GetHashValue(nItemID);
@@ -1159,7 +1253,7 @@ begin
 
           // Finalise output to the Loadfile for this Item
           // Populate the loadfile, using Unicode TAB character value. Not comma, because sometimes e-mail attachments contain comma in the name
-          slOutput.Add(UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
+          slOutput.Add(ControlNumberPrefix+UniqueID+#09+UniqueID+#09+NativeFileName+#09+JoinedFilePath+#09+OutputLocationForTEXT+#09+OutputLocationForNATIVE+#09+strHashValue+#09+strModifiedDateTime);
         end  // end of first XWF_OpenItem to native file
         else // Alert the user that the native file could not handled
         begin

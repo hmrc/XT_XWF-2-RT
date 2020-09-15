@@ -1,6 +1,40 @@
 RELEASE NOTES
 =============
 
+Sept 2020 v0.9 Alpha
+Upon execution, and in addition of being asked for an output location, the user is now also asked for a : 
+
+1) Control Number prefix name 
+2) Control Number prefix starting digit
+
+Combined, these values help ensure that if a user adds items from multiple seizures\exhibits for ingestion into
+the SAME Relativity case, the items still have a unique value. Why is the XWF Unique ID not enough? Because the XWF Unique ID works
+perfeclty for XWF, but not necessarly for Relativity, because, for each partition, each item as an ID (called the Int ID). 
+The partition number is the prefixed to that, with a hyphen, to form a Unique ID such as 0-1234 (for the 1,234th item of partition 0
+from SeizureX. And so, in XWF, you may have multiple seizures\exhibits but XWF keeps each item unique with its own ID system and 
+seperate from the other evidence objects. Relativity, however, does not. And so if you have two seizures\exhibits in Relativity
+you may well have two items with Unique ID "0-1234". So, to get around this, we prepend the Unique ID from XWF with the seizure\exhibit ref
+and an incrementor. So, for seizure SMITH001, there may be 2 partitions. On each partition, there may be an item with ID 1234, so on 
+Partition 0 you will have 0-1234 and on Partition 1 you will have 1-1234. And so our Control Number for Relativity becomes a 
+combination of XWF Unique ID blended with a ref name and a counter. 
+
+Example 1 : SMITH001-1-0-1234 where
+SMITH001 : Seizure\Exhibit Ref
+-1- : The first item processed by the X-Tension
+0-1234 : The XWF Unique ID from Partition 0
+
+Example 2 : SMITH001-1-1-23456 where
+SMITH001 : Seizure\Exhibit Ref
+-1- : The first item processed by the X-Tension
+1-23456 : The XWF Unique ID from Partition 1
+
+Example 3 : SMITH001-100-1-1234 where
+SMITH001 : Seizure\Exhibit Ref
+-100- : The 100th item processed by the X-Tension
+1-1234 : The XWF Unique ID from Partition 1
+
+In addition, the XWF Unique ID is also reported in a seperate column as well, for completeness. 
+
 July 2020 v0.8 Alpha
 No longer the need for an OutputLocation.txt file to get a custom path. XWF will ask the user for an output location
 

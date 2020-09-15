@@ -147,7 +147,7 @@ type
 	TXWF_GetEvent = function (EventNo: DWord; EvtInfo: PEventInfo): DWord; stdcall;
 
 	TXWF_OutputMessage = procedure (lpMessage: PWideChar; nFlags: DWord); stdcall;
-        TXWF_GetUserInput = procedure(lpMessage : LPWSTR; lpBuffer : LPWSTR; nBufferLen : DWORD; nFlags : DWORD); stdcall;
+        TXWF_GetUserInput = function (lpMessage, lpBuffer: PWideChar; nBufferLen, nFlags: DWord): Int64; stdcall;
 	TXWF_ShowProgress = procedure (lpCaption: PWideChar; nFlags: DWord); stdcall;
 	TXWF_SetProgressPercentage = procedure (nPercent: DWord); stdcall;
 	TXWF_SetProgressDescription = procedure (lpStr: PWideChar); stdcall;

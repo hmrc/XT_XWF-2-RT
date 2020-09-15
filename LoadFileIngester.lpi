@@ -23,13 +23,13 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics\xwb64.exe"/>
+        <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics Official\xwforensics64.exe"/>
       </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
         <Mode0 Name="default">
           <local>
-            <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics\xwb64.exe"/>
+            <HostApplicationFilename Value="C:\Program Files\X-Ways Forensics Official\xwforensics64.exe"/>
           </local>
         </Mode0>
       </Modes>
@@ -58,6 +58,7 @@
     </SearchPaths>
     <CodeGeneration>
       <RelocatableUnit Value="True"/>
+      <TargetCPU Value="x86_64"/>
     </CodeGeneration>
     <Linking>
       <Debugging>
