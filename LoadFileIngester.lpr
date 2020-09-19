@@ -66,30 +66,32 @@ uses
 var
   // These are global vars, initialised using Default declarations where possible
   // for optimum memory management
-  MainWnd                  : THandle;
-  CurrentVolume            : THandle;
-  VerRelease               : LongInt = Default(LongInt);
-  ServiceRelease           : Byte    = Default(Byte);
-  TotalDataInBytes         : Int64   = Default(Int64);
-  HashType                 : Int64   = Default(Int64);
-  ObjectID                 : Int64   = Default(Int64);  // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
-  intOutputLength          : integer = Default(integer);
-  HasAParent               : integer = Default(integer);
-  TotalCounterNativeFiles  : integer = Default(integer);
-  TotalCounterTextFiles    : integer = Default(integer);
-  SelectedItemsCounter     : integer = Default(integer);
-  RunFolderBuilder         : Boolean = true;
-  VerReleaseIsLessThan2000 : Boolean = Default(Boolean);
-  VerRelease2000OrAbove    : Boolean = Default(Boolean);
-  TextificationOutputPath  : string  = Default(string);
-  strTimeTakenLocal        : string  = Default(string);
-  strTimeTakenGlobal       : string  = Default(string);
-  strOutputLocation        : WideString = Default(WideString);
-  slOutput                 : TStringlistUTF8;
-  ErrorLog                 : TStringListUTF8;
-  StartTime                : TDateTime = Default(TDateTime);
-  EndTime                  : TDateTime = Default(TDateTime);
-  TimeTakenGlobal          : TDateTime = Default(TDateTime);
+  MainWnd                      : THandle;
+  CurrentVolume                : THandle;
+  VerRelease                   : LongInt = Default(LongInt);
+  ServiceRelease               : Byte    = Default(Byte);
+  TotalDataInBytes             : Int64   = Default(Int64);
+  HashType                     : Int64   = Default(Int64);
+  ObjectID                     : Int64   = Default(Int64);  // This is the prefix value of Unique ID from the EVIDENCE Object (not hVolume), e.g. "3" in 3-15895"
+  intOutputLength              : integer = Default(integer);
+  HasAParent                   : integer = Default(integer);
+  TotalCounterNativeFiles      : integer = Default(integer);
+  TotalCounterTextFiles        : integer = Default(integer);
+  TotalCounterFailedTextFiles  : integer = Default(integer); // Tallies failed text outputs of files otherwise considered suitable by XWF
+  TotalCounterFailedNativeFiles: integer = Default(integer); // Tallies failed native file exports that were otherwise considered suitable by XWF
+  SelectedItemsCounter         : integer = Default(integer);
+  RunFolderBuilder             : Boolean = true;
+  VerReleaseIsLessThan2000     : Boolean = Default(Boolean);
+  VerRelease2000OrAbove        : Boolean = Default(Boolean);
+  TextificationOutputPath      : string  = Default(string);
+  strTimeTakenLocal            : string  = Default(string);
+  strTimeTakenGlobal           : string  = Default(string);
+  strOutputLocation            : WideString = Default(WideString);
+  slOutput                     : TStringlistUTF8;
+  ErrorLog                     : TStringListUTF8;
+  StartTime                    : TDateTime = Default(TDateTime);
+  EndTime                      : TDateTime = Default(TDateTime);
+  TimeTakenGlobal              : TDateTime = Default(TDateTime);
 
   OutputSubFolderNative, OutputSubFolderText, OutputFolder : array[0..Buflen-1] of WideChar;
 
@@ -220,6 +222,7 @@ begin
   for i := 1 to Length(s) do
    begin
      if ((s[i] = #34) or    // the quote char "
+         (s[i] = #5) or     // the square box found in SummaryInformation names []
          (s[i] = #42) or    // the asterix *
          (s[i] = #47) or    // the forward slash /
          (s[i] = #58) or    // the colon :
@@ -252,6 +255,7 @@ begin
   for i := 1 to Length(s) do
    begin
      if ((s[i] = #34) or    // the quote char "
+         (s[i] = #5) or     // the square box found in SummaryInformation names []
          (s[i] = #42) or    // the asterix *
          (s[i] = #47) or    // the forward slash /
          (s[i] = #58) or    // the colon :
@@ -641,6 +645,7 @@ begin
       try
         // Create error log list in memory
         ErrorLog := TStringListUTF8.Create;
+        ErrorLog.Add('This file is tab seperated (TSV). Open in a spreadsheet tool for easy seperation of columns' + #09);
       finally
         // ErrorLog is freed in XT_Finalize
       end;
@@ -948,6 +953,7 @@ begin
               except
                 on E: EFOpenError do
                 begin
+                  inc(TotalCounterFailedNativeFiles, 1);
                   errormessage := 'Could not write native filestream. Maybe permissions or disk storage issue? ' + E.Message;
                   lstrcpyw(Buf, errorMessage);
                   XWF_OutputMessage(@Buf[0], 0);
@@ -964,7 +970,8 @@ begin
               except
                 on E: EFOpenError do
                   begin
-                    errormessage := 'ERROR : Could not write native filestream as sanitised stream. Maybe a filename issue remaining? ' + E.Message;
+                    inc(TotalCounterFailedNativeFiles, 1);
+                    errormessage := 'Could not write native filestream as sanitised stream. Maybe a filename issue remaining? ' + E.Message;
                     lstrcpyw(Buf, errorMessage);
                     XWF_OutputMessage(@Buf[0], 0);
                   end;
@@ -980,7 +987,8 @@ begin
               except
                 on E: EFOpenError do
                 begin
-                  errormessage := 'ERROR : Could not create truncated filestream. Maybe filename has not been suitbly shortened? Check length? ' + E.Message;
+                  inc(TotalCounterFailedNativeFiles, 1);
+                  errormessage := 'Could not create truncated filestream. Maybe filename has not been suitbly shortened? Check length? ' + E.Message;
                   lstrcpyw(Buf, errorMessage);
                   XWF_OutputMessage(@Buf[0], 0);
                 end;
@@ -992,15 +1000,6 @@ begin
             // the source and write it out to the stream
             if assigned(OutputStreamNative) then
             begin
-              // if it's an e-mail, convert it to PDF first
-              // REMOVE THIS BEGIN END OF EXPORT TO PDF NOT VIABLE
-              {if (lpTypeDescr = 'E-mail') then
-              begin
-                XWF_Close(hItem);
-                hItem := XWF_OpenItem(CurrentVolume, nItemID, $0200);
-                ItemSize := XWF_GetSize(hItem, nil);
-                SetLength(InputBytesBuffer, ItemSize);
-              end;   }
               // Read the native file item to buffer
               intBytesRead := XWF_Read(hItem, 0, @InputBytesBuffer[0], ItemSize);
               // Write the native file out to disk using the above declared stream
@@ -1008,7 +1007,8 @@ begin
               WriteSuccess := OutputStreamNative.Write(InputBytesBuffer[0], ItemSize);
               if WriteSuccess = -1 then
                 begin
-                  errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + ' could not be written to disk. FileStream write error.';
+                  inc(TotalCounterFailedNativeFiles, 1);
+                  errormessage := UniqueID+'-'+NativeFileName + ' could not be written to disk. FileStream write error.';
                   lstrcpyw(Buf, errormessage);
                   XWF_OutputMessage(@Buf[0], 0);
                 end
@@ -1072,7 +1072,7 @@ begin
                   OfficeFileReadResult := temp_strm.Read(InputBytesBuffer[1], temp_strm.Size);
                   if OfficeFileReadResult = 0 then
                   begin
-                    errormessage := 'ERROR : Could not read exported compound office file ' + OutputLocationOfFile;
+                    errormessage := 'Could not read exported compound office file ' + OutputLocationOfFile;
                     lstrcpyw(Buf, errorMessage);
                     XWF_OutputMessage(@Buf[0], 0);
                   end;
@@ -1113,7 +1113,7 @@ begin
                 except
                   on E: EFOpenError do
                     begin
-                      errormessage := 'ERROR : Could not create textified filestream of native fie ' + OutputFileText + ', ' + E.Message;
+                      errormessage := 'Could not create textified filestream of native fie ' + OutputFileText + ', ' + E.Message;
                       lstrcpyw(Buf, errorMessage);
                       XWF_OutputMessage(@Buf[0], 0);
                     end;
@@ -1126,7 +1126,8 @@ begin
                 WriteSuccess := OutputStreamText.Write(TextifiedBuffer[0], Length(TextifiedBuffer));
                 if WriteSuccess = -1 then
                 begin
-                  errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
+                  inc(TotalCounterFailedTextFiles, 1);
+                  errormessage := UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
                   lstrcpyw(Buf, errormessage);
                   XWF_OutputMessage(@Buf[0], 0);
                 end
@@ -1208,7 +1209,7 @@ begin
                   except
                     on E: EFOpenError do
                       begin
-                        errormessage := 'ERROR : Could not create textified filestream of native fie ' + OutputFileText + ', ' + E.Message;
+                        errormessage := 'Could not create textified filestream of native fie ' + OutputFileText + ', ' + E.Message;
                         lstrcpyw(Buf, errorMessage);
                         XWF_OutputMessage(@Buf[0], 0);
                       end;
@@ -1218,7 +1219,8 @@ begin
                   WriteSuccess := OutputStreamText.Write(InputBytesBuffer[0], ItemSize);
                   if WriteSuccess = -1 then
                   begin
-                    errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
+                    inc(TotalCounterFailedTextFiles, 1);
+                    errormessage := UniqueID+'-'+NativeFileName + '.txt' + ' could not be written to disk. TextStream write error.';
                     lstrcpyw(Buf, errormessage);
                     XWF_OutputMessage(@Buf[0], 0);
                   end
@@ -1241,8 +1243,8 @@ begin
             end // End of valid handle check : if hItem > 0 etc. If the handle failed, warn the user
             else
             begin // Alert the user that a viewer component view of the file could not be painted
-              errorlog.add(UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read cannot be obtained. No text? Encrypted? Corrupt?');
-              errormessage := 'ERROR : ' + UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read of it cannot be obtained. No text? Encrypted? Corrupt?';
+              errorlog.add(UniqueID+#9+NativeFileName + '.txt' + ' could not be written because a text based viewer component read cannot be obtained. No text? Encrypted? Corrupt?');
+              errormessage := UniqueID+'-'+NativeFileName + '.txt' + ' could not be written because a text based viewer component read of it cannot be obtained. No text? Encrypted? Corrupt?';
               lstrcpyw(Buf, errormessage);
               XWF_OutputMessage(@Buf[0], 0);
               errormessage := '....carrying on regardless....please wait';
@@ -1258,8 +1260,8 @@ begin
         else // Alert the user that the native file could not handled
         begin
           UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
-          errorlog.add(UniqueID + ' could not be accessed by XWF at all using this X-Tension. File handle initiatation failed.');
-          errormessage := 'ERROR : ' + UniqueID + ' could not be accessed at all by XWF using this X-Tension. File handle initiatation failed';
+          errorlog.add(UniqueID + #09+ ' could not be accessed by XWF at all using this X-Tension. File handle initiatation failed.');
+          errormessage := UniqueID + ' could not be accessed at all by XWF using this X-Tension. File handle initiatation failed';
           lstrcpyw(Buf, errormessage);
           XWF_OutputMessage(@Buf[0], 0);
           errormessage := '....carrying on regardless....please wait';
@@ -1273,40 +1275,40 @@ begin
         // 0=not verified, 1=too small, 2=totally unknown, 3=confirmed, 4=not confirmed, 5=newly identified, 6=mismatch detected. -1 means error.
         if itemtypeinfoflag = 0 then
         begin
-          errorlog.add(UniqueID + ' file type is not verified.');
+          errorlog.add(UniqueID +#09+ ' file type is not verified.');
         end
           else if itemtypeinfoflag = 1 then
           begin
-            errorlog.add(UniqueID + ' file type is too small to be verified.');
+            errorlog.add(UniqueID +#09+ ' file type is too small to be verified.');
           end
             else if itemtypeinfoflag = 2 then
             begin
-              errorlog.add(UniqueID + ' file type is totally unknown to XWF.');
+              errorlog.add(UniqueID +#09+ ' file type is totally unknown to XWF.');
             end
               else if itemtypeinfoflag = 4 then
               begin
-                errorlog.add(UniqueID + ' file type cannot be confirmed by XWF. Most likely invalid');
+                errorlog.add(UniqueID +#09+ ' file type cannot be confirmed by XWF. Most likely invalid');
               end
                 else if itemtypeinfoflag = 6 then
                 begin
-                  errorlog.add(UniqueID + ' file type is mismatched.');
+                  errorlog.add(UniqueID +#09+ ' file type is mismatched.');
                 end
                   else if itemtypeinfoflag = -1 then
                   begin
-                    errorlog.add(UniqueID + ' error looking up file type entirely.');
+                    errorlog.add(UniqueID +#09+ ' error looking up file type entirely.');
                   end;
       end; // End of error log entry
     end // end of description check
     else
     begin
       UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
-      errorlog.add(UniqueID + ' type descriptor could not be identified at all. Skipped.');
+      errorlog.add(UniqueID +#09+ ' type descriptor could not be identified at all. Skipped.');
     end;
   end // end of itemsize check
   else
   begin
     UniqueID := IntToStr(Word(ObjectID)) + '-' + IntToStr(nItemID);
-    errorlog.add(UniqueID + ' size was 0 bytes. Skipped.');
+    errorlog.add(UniqueID +#09+ ' size was 0 bytes. Skipped.');
   end;
 
   // The ALL IMPORTANT 0 return value!!
@@ -1363,8 +1365,8 @@ begin
     end;
   end
     else
-    try
-      errorlog.savetofile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.txt');
+    try // Save error log as a TSV file (was txt prior to v0.10 Alpha)
+      errorlog.savetofile(IncludeTrailingPathDelimiter(LoadFileOutputFolder) + 'ErrorLog.tsv');
     finally
       errorlog.free;
     end;
@@ -1389,14 +1391,27 @@ end;
 // Should return 0.
 function XT_Done(lpReserved: Pointer) : integer; stdcall; export;
 const
-  Buflen=512;
+  Buflen=4096;
 var
   Buf, outputmessage : array[0..Buflen-1] of WideChar;
 begin
   // Tell the user we are totally done.
-  outputmessage := 'FINISHED. ' + IntToStr(SelectedItemsCounter)    + ' items selected. '
+  outputmessage := 'FINISHED. ' + IntToStr(SelectedItemsCounter)    + ' items considered (selected items and child items, if requested by user). '
                                 + IntToStr(TotalCounterNativeFiles) + ' native files exported and '
-                                + IntToStr(TotalCounterTextFiles)   + ' text versions exported.';
+                                + IntToStr(TotalCounterTextFiles)   + ' text versions successfully exported.';
+
+  // Only display stats about failed text files if some failed beyond the standard validation checks of XWF
+  if TotalCounterFailedTextFiles > 0 then
+  begin
+   outputmessage := outputmessage + IntToStr(TotalCounterFailedTextFiles) + ' text versions could either not be generated or not written despite best efforts by XWF and '
+  end;
+
+  // Only display stats about failed native files if some failed beyond the standard validation checks of XWF
+  if TotalCounterFailedNativeFiles > 0 then
+  begin
+   outputmessage := outputmessage + IntToStr(TotalCounterFailedNativeFiles) + ' native files could not be read our written despite best efforts by XWF (i.e. they were considered valid but still failed to get out).';
+  end;
+
   lstrcpyw(Buf, outputmessage);
   XWF_OutputMessage(@Buf[0], 0);
   result := 0;

@@ -1,6 +1,13 @@
 RELEASE NOTES
 =============
 
+Sept 2020 v0.10 Alpha
+Tab seperators added to error log file so that the user can easily import the log into a spreadhseet and have all the Unique ID values seperated into a column, for easy pasting back into the XWF Unique ID filter column
+On rare occasions, files with Type Descriptor 'Summary information' and 'type' of 'summary' can pass all the validation checks but they contain an illegal filesystem char of 'white square' (U+25A1, Octal 05, Decimal 5, Hex 0x5, HTML #5). This is now stripped as an invalid char even if the user includes them (either accidentally or for some strange reason otherwise). 
+Minor re-phrase of some output messages removing the word "ERROR" for some because such a word indicates a programmatic problem of course, but if the user has just selected an invalid file, then that is not a programmtic error.  
+Additional counters added to count files that passed validation checks by XWF but still failed to export or textifiy. These values will show in the messages window at the end if greater than 0 but DO NOT include failed files that were skipped by XWF for failing validation checks. 
+
+
 Sept 2020 v0.9 Alpha
 Upon execution, and in addition of being asked for an output location, the user is now also asked for a : 
 
