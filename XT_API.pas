@@ -80,6 +80,13 @@ type
 	 lpPrivate: Pointer;
 	end;
 
+        PSrcInfo=^TSrcInfo;
+        TSrcInfo=packed record
+          nStructSize : DWord;
+          nBufSize : INT64;
+          pBuffer : LPVOID;
+        end;
+
 type
 	TXWF_GetSize = function (hVolumeOrItem: THandle; lpOptional: Pointer): Int64; stdcall;
         TXWF_GetProp = function (hVolumeOrItem: THandle; nPropType : DWORD; lpBuffer : PVOID) : Int64; stdcall;

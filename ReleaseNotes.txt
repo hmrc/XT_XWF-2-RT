@@ -1,6 +1,15 @@
 RELEASE NOTES
 =============
 
+March 2023 - v1.0 Beta
+Family relationships are maintained in the export. Families will share an identifier and a date to facilitate simple ordering when imported into a suitable tool.
+Ordering and ID generation is based on family groups. Exports will be ordered by oldest families first, with any child documents ordered amongst the family by their date following the parent document. The generated IDs will be numbered sequentially from the provided start number through the ordered documents.
+Dates are discovered for child items through their file metadata, rather than just file system metadata, if appropriate. File Last Modified date is the preferred option, but Creation Date can be used if Last Modified doesn't exist. As a result, the column in the loadfile is named "Primary Date" as it could be from either field.
+Document IDs are padded for lexicographical sorting. The padding allows for a maximum of 9999999 unique items per ID prefix.
+File paths are no longer shortened at any stage. The only sanitisation is to remove newline characters (CR, LF) and Tab characters so that it doesn't interfere with the loadfile separators.
+Files written out to disk are named using the Document ID, so they can be easily corroborated with the loadfile.
+Empty text files are written for documents where no text could be extracted, so that the file counts match making it easier to validate an export has the correct file resources included with it.
+
 Sept 2020 v0.10 Alpha
 Tab seperators added to error log file so that the user can easily import the log into a spreadhseet and have all the Unique ID values seperated into a column, for easy pasting back into the XWF Unique ID filter column
 On rare occasions, files with Type Descriptor 'Summary information' and 'type' of 'summary' can pass all the validation checks but they contain an illegal filesystem char of 'white square' (U+25A1, Octal 05, Decimal 5, Hex 0x5, HTML #5). This is now stripped as an invalid char even if the user includes them (either accidentally or for some strange reason otherwise). 
