@@ -1,10 +1,14 @@
 RELEASE NOTES
 =============
 
-March 2023 - v1.0 Beta
+March 2023 Update
+FIX - The sorting has an edge case fixed which had caused the application to continue sorting indefinitely.
+The family is now grouped to the top level family member that is in the export group. This keeps all documents however far down the chain grouped together, as long as they are all being exported. NOTE - this means that if you export a container such as an email inbox, all of the emails would be grouped in a single family for the inbox which is normally not desirable.
+
+March 2023
 Family relationships are maintained in the export. Families will share an identifier and a date to facilitate simple ordering when imported into a suitable tool.
 Ordering and ID generation is based on family groups. Exports will be ordered by oldest families first, with any child documents ordered amongst the family by their date following the parent document. The generated IDs will be numbered sequentially from the provided start number through the ordered documents.
-Dates are discovered for child items through their file metadata, rather than just file system metadata, if appropriate. File Last Modified date is the preferred option, but Creation Date can be used if Last Modified doesn't exist. As a result, the column in the loadfile is named "Primary Date" as it could be from either field.
+Dates are discovered for child items through their file metadata, rather than just file system metadata, if appropriate. File Last Modified date is the preferred option, but Creation Date can be used if Last Modified doesn't exist. As a result, the column in the loadfile is named "Primary Date" as it could be from either field.W
 Document IDs are padded for lexicographical sorting. The padding allows for a maximum of 9999999 unique items per ID prefix.
 File paths are no longer shortened at any stage. The only sanitisation is to remove newline characters (CR, LF) and Tab characters so that it doesn't interfere with the loadfile separators.
 Files written out to disk are named using the Document ID, so they can be easily corroborated with the loadfile.

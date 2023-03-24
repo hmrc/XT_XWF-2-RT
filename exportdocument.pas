@@ -26,8 +26,8 @@ type
     procedure AddParent(parentId: int32; parentDate: TDateTime);
     procedure AddIds(cn, groupId: WideString);
     function WriteLine(sep: char; tempDir: string; dateFormat: string): WideString;
-    constructor Create(id: int32; originalId, fname, fpath, hash, npath, tpath: WideString;
-      lastModDate: TDateTime);
+    constructor Create(id: int32;
+      originalId, fname, fpath, hash, npath, tpath: WideString; lastModDate: TDateTime);
   end;
 
   // define the Export List type
@@ -45,7 +45,7 @@ type
     procedure AddParents(getParentId: TCallback);
     procedure SortDocuments;
     procedure GenerateControlNumbers(prefix: WideString; startNumber: int32);
-    procedure SaveToStream(stream: TFileStream; includeHeader: Boolean);
+    procedure SaveToStream(stream: TFileStream; includeHeader: boolean);
     procedure SaveToFile(path: string);
     constructor Create(sep: char; tempDir, dateFormat: string;
       parentCheck: TParentCheck);
@@ -155,11 +155,15 @@ begin
   begin
     Exit();
   end;
+  if A.DocumentId = B.DocumentId then
+  begin
+    Exit(0);
+  end;
   // sort by parent date in first order, so documents are labelled by family order
   interim := CompareDateTime(A.ParentDate, B.ParentDate);
   if (interim <> 0) then
   begin
-    Result := interim;
+    Exit(interim);
   end
   else
   begin
@@ -169,25 +173,32 @@ begin
     interim := A.ParentId - B.ParentId;
     // A.ParentId - B.ParentId keeps the families together, but deterministically sorts based on Parent ID (i.e. it's family XWF Id)
     // if the number is 0 then same family
-    if interim <> 0 then
+    if (interim <> 0) then
     begin
-      Result := interim;
+      Exit(interim);
     end
     // if it has made it this far it must be same family documents being compared
     // if A is the parent then make it first
     else if AisParent then
     begin
-      Result := -1;
+      Exit(-1);
     end
     // if B is parent make it first
     else if BIsParent then
     begin
-      Result := 1;
+      Exit(1);
     end
     // use last modified date as a decider when the sorting child documents inside a family
     else
     begin
-      Result := CompareDateTime(A.LastModifiedDate, B.LastModifiedDate);
+      interim := CompareDateTime(A.LastModifiedDate, B.LastModifiedDate);
+      if interim <> 0 then
+      begin
+        Exit(interim);
+      end
+      else
+      begin
+      end;
     end;
   end;
 end;
@@ -215,8 +226,8 @@ begin
   // We use the Last Modified Dates, and then the Creation Date, and finally find a date from the metadata (last saved/last modified)
   self.HeaderLine := 'Control Number' + Separator + 'Group Id' +
     Separator + 'XWF Id' + Separator + 'Filename' + Separator + 'Path' +
-    Separator + 'Primary Date' + Separator + 'Family Date' +
-    Separator + 'Hash' + Separator + 'Native Path' + Separator + 'Text Path';
+    Separator + 'Primary Date' + Separator + 'Family Date' + Separator +
+    'Hash' + Separator + 'Native Path' + Separator + 'Text Path';
 end;
 
 // Need to override Free here, as we need to Free our Object List
@@ -246,12 +257,13 @@ end;
 procedure ExportList.AddParents(getParentId: TCallback);
 var
   current: ExportDocument;
-  i, currentId, parentId: int32;
+  i, currentId, parentId, highestParentId: int32;
   notSelf: boolean = False;
 begin
   // cycle through each document
   for i := 0 to Documents.Count - 1 do
   begin
+    highestParentId := -1;
     current := Documents.Items[i];
     currentId := current.DocumentId;
     parentId := getParentId(currentId);
@@ -261,21 +273,22 @@ begin
       // if we stored a parent with that id in the parentlookup, use these values and break
       if self.ParentLookup.ContainsKey(parentId) then
       begin
-        current.AddParent(parentId, (self.ParentLookup[parentId]));
+        // we want all family members to be attached to same top level parent, so keep looking to find the highest parent document being export
+        highestParentId := parentId;
+        {current.AddParent(parentId, (self.ParentLookup[parentId]));
         notSelf := True;
-        Break;
+        Break;   }
       end;
       parentId := getParentId(parentId);
     end;
-    // if the document isn't marked as notSelf (i.e. has a known parent) use it's own values for parent ID/date
-    if not notSelf then
+    // if we have found a parent (current version is stored in highestParentId) then use this to set parent values
+    if highestParentId > 0 then
     begin
-      current.AddParent(currentId, Documents.Items[i].LastModifiedDate);
+      current.AddParent(highestParentId, (self.ParentLookup[highestParentId]));
     end
     else
     begin
-      notSelf := False;
-      // reset this to false so it isn't true for the next document accidentally
+      current.AddParent(currentId, Documents.Items[i].LastModifiedDate);
     end;
   end;
 end;
@@ -319,7 +332,7 @@ end;
 
 // Gien a stream, save all of the document entries to it
 // This function does NOT close the stream
-procedure ExportList.SaveToStream(stream: TFileStream; includeHeader: Boolean);
+procedure ExportList.SaveToStream(stream: TFileStream; includeHeader: boolean);
 var
   line: WideString;
   i: int32;
@@ -333,14 +346,14 @@ begin
     line := self.HeaderLine + LineEnding;
     // multiple length by sizeof widechar to get the actual byte length
     stream.Write(UTF16BOM[0], 2);
-    stream.Write(line[1], Length(line) * SizeOf(WideChar));
+    stream.Write(line[1], Length(line) * SizeOf(widechar));
   end;
   // cycle through all documents and add a line per documennt
   for i := 0 to Documents.Count - 1 do
   begin
     // write the (escaped) line into the loadfile for the document and add LineEnding (os specific)
     line := Documents.Items[i].WriteLine(Separator, TempDir, DateFormat) + LineEnding;
-    stream.Write(line[1], Length(line) * SizeOf(WideChar));
+    stream.Write(line[1], Length(line) * SizeOf(widechar));
   end;
 end;
 
